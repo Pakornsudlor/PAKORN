@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บันทึกรายรับรายจ่าย</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>รายรับรายจ่าย</h1>
+    <div class="month-nav">
+      <button id="prevMonth" aria-label="เดือนก่อน">‹</button>
+      <input type="month" id="monthPicker" aria-label="เลือกเดือน">
+      <button id="nextMonth" aria-label="เดือนถัดไป">›</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary">
+      <div class="card income"><span>รายรับ</span><strong id="sumIncome">0</strong></div>
+      <div class="card expense"><span>รายจ่าย</span><strong id="sumExpense">0</strong></div>
+      <div class="card balance"><span>คงเหลือ</span><strong id="sumBalance">0</strong></div>
+    </section>
+
+    <section class="panel">
+      <h2 id="formTitle">เพิ่มรายการ</h2>
+      <form id="txForm" autocomplete="off">
+        <div class="type-toggle" role="radiogroup">
+          <label><input type="radio" name="type" value="expense" checked> รายจ่าย</label>
+          <label><input type="radio" name="type" value="income"> รายรับ</label>
+        </div>
+        <div class="grid">
+          <label>จำนวนเงิน (บาท)
+            <input type="number" id="amount" min="0.01" step="0.01" required inputmode="decimal">
+          </label>
+          <label>วันที่
+            <input type="date" id="date" required>
+          </label>
+          <label>หมวดหมู่
+            <select id="category" required></select>
+          </label>
+          <label>บันทึก
+            <input type="text" id="note" maxlength="100" placeholder="เช่น ข้าวกลางวัน">
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary" id="submitBtn">บันทึก</button>
+          <button type="button" id="cancelEdit" hidden>ยกเลิกแก้ไข</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>รายจ่ายตามหมวดหมู่</h2>
+      <div id="breakdown" class="breakdown"></div>
+    </section>
+
+    <section class="panel">
+      <div class="list-head">
+        <h2>รายการเดือนนี้</h2>
+        <select id="filterType" aria-label="กรองประเภท">
+          <option value="all">ทั้งหมด</option>
+          <option value="income">รายรับ</option>
+          <option value="expense">รายจ่าย</option>
+        </select>
+      </div>
+      <ul id="txList" class="tx-list"></ul>
+      <p id="emptyMsg" class="empty" hidden>ยังไม่มีรายการในเดือนนี้</p>
+    </section>
+
+    <section class="panel tools">
+      <h2>สำรองข้อมูล</h2>
+      <div class="actions">
+        <button type="button" id="exportJson">ส่งออก JSON</button>
+        <button type="button" id="exportCsv">ส่งออก CSV</button>
+        <label class="file-btn">นำเข้า JSON<input type="file" id="importJson" accept="application/json,.json" hidden></label>
+      </div>
+      <p class="hint">ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ควรส่งออกไฟล์สำรองเป็นระยะ</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
