@@ -1,0 +1,748 @@
+<title>รายรับรายจ่าย Pakorn</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one narrow ledger column — month totals, entry form, category bars, then the day-by-day list */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --text: #18201d;
+  --muted: #64706b;
+  --border: #dde3e0;
+  --income: #12784a;
+  --expense: #b8352b;
+  --accent: #1f6b5c;
+  --bar: #e2918a;
+  --font-body: "IBM Plex Sans Thai", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121715; --surface: #1b2220; --text: #e6ebe9; --muted: #96a29d; --border: #2c3532;
+    --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121715; --surface: #1b2220; --text: #e6ebe9; --muted: #96a29d; --border: #2c3532;
+  --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+}
+.wrap {
+  max-width: 720px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+h1 { margin: 0; font-size: 1.35rem; font-weight: 600; text-wrap: balance; }
+h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+.status { font-size: .8rem; color: var(--muted); }
+.month-nav { display: flex; gap: 6px; align-items: center; }
+input, select, button {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-width: 0;
+}
+button { cursor: pointer; }
+button:hover, .file-btn:hover { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 500; }
+button.danger { border-color: var(--expense); color: var(--expense); }
+
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile span { color: var(--muted); font-size: .8rem; letter-spacing: .02em; }
+.tile strong { font-family: var(--font-num); font-size: 1.15rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tile.income strong { color: var(--income); }
+.tile.expense strong { color: var(--expense); }
+.tile.neg strong { color: var(--expense); }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.type-toggle { display: flex; gap: 6px; }
+.type-toggle label { flex: 1; text-align: center; border: 1px solid var(--border); border-radius: 8px; padding: 8px; cursor: pointer; }
+.type-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.type-toggle label:has(input[value="expense"]:checked) { border-color: var(--expense); color: var(--expense); font-weight: 600; }
+.type-toggle label:has(input[value="income"]:checked) { border-color: var(--income); color: var(--income); font-weight: 600; }
+.type-toggle label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); min-width: 0; }
+.grid input, .grid select { width: 100%; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.breakdown { display: flex; flex-direction: column; gap: 6px; }
+.brow { display: grid; grid-template-columns: 104px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: .9rem; }
+.track { background: var(--bg); border-radius: 4px; height: 10px; overflow: hidden; }
+.fill { background: var(--bar); height: 100%; }
+.val { font-family: var(--font-num); font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.list-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tx-list { list-style: none; margin: 0; padding: 0; }
+.tx-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+.tx-list li:first-child { border-top: 0; }
+.cat { font-weight: 500; }
+.meta { color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
+.amt { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amt.income { color: var(--income); }
+.amt.expense { color: var(--expense); }
+.row-btns { display: flex; gap: 4px; }
+.row-btns button { padding: 4px 8px; font-size: .8rem; }
+
+.empty, .hint { color: var(--muted); font-size: .88rem; margin: 0; }
+.file-btn { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: .9rem;
+  max-width: calc(100% - 32px);
+}
+.quick-row { display: flex; gap: 8px; }
+.quick-row input { flex: 1; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 10px; }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn.listening { border-color: var(--expense); color: var(--expense); background: var(--bg); }
+.partial { color: var(--muted); font-style: italic; margin: 0; overflow-wrap: anywhere; }
+.ai-status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); font-size: .88rem; }
+.ai-status button { padding: 4px 10px; font-size: .85rem; }
+.draft { border: 1px dashed var(--accent); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.draft h3 { margin: 0; font-size: .95rem; }
+.draft-row { display: grid; grid-template-columns: 96px 104px minmax(0, 1fr) 140px 120px auto; gap: 6px; align-items: center; }
+.draft-row input, .draft-row select { width: 100%; padding: 6px 8px; font-size: .9rem; }
+.draft-row button { padding: 6px 10px; }
+.draft-total { font-family: var(--font-num); font-size: .9rem; color: var(--muted); }
+@media (max-width: 560px) {
+  .summary { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: 1fr; }
+  .draft-row { grid-template-columns: 1fr 1fr; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .draft-row .d-note { grid-column: 1 / -1; }
+  .brow { grid-template-columns: 76px minmax(0, 1fr) auto; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>รายรับรายจ่าย</h1>
+      <div class="status" id="status">กำลังโหลดข้อมูล…</div>
+    </div>
+    <div class="month-nav">
+      <button type="button" id="prevMonth" aria-label="เดือนก่อน">‹</button>
+      <input type="month" id="monthPicker" aria-label="เลือกเดือน">
+      <button type="button" id="nextMonth" aria-label="เดือนถัดไป">›</button>
+    </div>
+  </header>
+
+  <section class="summary" aria-label="สรุปเดือนนี้">
+    <div class="tile income"><span>รายรับ (บาท)</span><strong id="sumIncome">0.00</strong></div>
+    <div class="tile expense"><span>รายจ่าย (บาท)</span><strong id="sumExpense">0.00</strong></div>
+    <div class="tile" id="balTile"><span>คงเหลือ (บาท)</span><strong id="sumBalance">0.00</strong></div>
+  </section>
+
+  <section class="panel">
+    <h2>จดด่วน</h2>
+    <form id="quickForm" class="quick-row" autocomplete="off">
+      <input type="text" id="quickText" maxlength="300" placeholder="เช่น กินกาแฟ 80" aria-label="พิมพ์รายการที่จะจด">
+      <button type="button" id="micBtn" class="icon-btn" aria-label="พูดแทนพิมพ์" title="พูดแทนพิมพ์" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>
+      </button>
+      <button type="submit" class="primary" id="quickSubmit">จด</button>
+    </form>
+    <p class="partial" id="partial" hidden></p>
+    <p class="hint">ใส่สิ่งที่จ่ายตามด้วยจำนวนเงิน จดหลายรายการพร้อมกันได้ เช่น "ข้าว 50 กาแฟ 65" ถ้าขึ้นต้นด้วย + หรือมีคำว่าเงินเดือน โบนัส ขายของ จะนับเป็นรายรับ ใส่ "เมื่อวาน" เพื่อจดย้อนหลังหนึ่งวัน</p>
+    <div class="actions" id="receiptRow" hidden>
+      <label class="file-btn">ถ่ายหรือแนบรูปใบเสร็จ<input type="file" id="receiptInput" accept="image/*" hidden></label>
+    </div>
+    <div class="ai-status" id="aiStatus" hidden><span id="aiStatusText"></span><button type="button" id="aiStop">หยุด</button></div>
+    <div class="draft" id="draftPanel" hidden>
+      <h3 id="draftTitle">ตรวจรายการก่อนบันทึก</h3>
+      <div id="draftList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="draft-total" id="draftTotal"></div>
+      <div class="actions">
+        <button type="button" class="primary" id="draftSave">บันทึกทั้งหมด</button>
+        <button type="button" id="draftCancel">ยกเลิก</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 id="formTitle">เพิ่มรายการ</h2>
+    <form id="txForm" autocomplete="off">
+      <div class="panel" style="padding:0;border:0;gap:12px">
+        <div class="type-toggle" role="radiogroup" aria-label="ประเภท">
+          <label><input type="radio" name="type" id="typeExpense" value="expense" checked>รายจ่าย</label>
+          <label><input type="radio" name="type" id="typeIncome" value="income">รายรับ</label>
+        </div>
+        <div class="grid">
+          <label>จำนวนเงิน (บาท)<input type="number" id="amount" min="0.01" step="0.01" required inputmode="decimal" placeholder="0.00"></label>
+          <label>วันที่<input type="date" id="date" required></label>
+          <label>หมวดหมู่<select id="category" required></select></label>
+          <label>บันทึก<input type="text" id="note" maxlength="100" placeholder="เช่น ข้าวกลางวัน"></label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary" id="submitBtn">บันทึก</button>
+          <button type="button" id="cancelEdit" hidden>ยกเลิกแก้ไข</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>รายจ่ายตามหมวดหมู่</h2>
+    <div id="breakdown" class="breakdown"></div>
+  </section>
+
+  <section class="panel">
+    <div class="list-head">
+      <h2>รายการในเดือน</h2>
+      <select id="filterType" aria-label="กรองประเภท">
+        <option value="all">ทั้งหมด</option>
+        <option value="income">รายรับ</option>
+        <option value="expense">รายจ่าย</option>
+      </select>
+    </div>
+    <ul id="txList" class="tx-list"></ul>
+    <p id="emptyMsg" class="empty" hidden>ยังไม่มีรายการในเดือนนี้ เพิ่มรายการแรกได้จากฟอร์มด้านบน</p>
+  </section>
+
+  <section class="panel">
+    <h2>สำรองข้อมูล</h2>
+    <div class="actions">
+      <button type="button" id="exportJson">ส่งออก JSON</button>
+      <button type="button" id="exportCsv">ส่งออก CSV</button>
+      <label class="file-btn">นำเข้า JSON<input type="file" id="importJson" accept="application/json,.json" hidden></label>
+    </div>
+    <p class="hint" id="storageHint"></p>
+  </section>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+  const LS_KEY = 'pakorn-expense-tracker-v1';
+  const CATEGORIES = {
+    expense: ['อาหาร', 'เดินทาง', 'ที่พัก/ค่าเช่า', 'สาธารณูปโภค', 'ช้อปปิ้ง', 'สุขภาพ', 'บันเทิง', 'การศึกษา', 'อื่นๆ'],
+    income: ['เงินเดือน', 'งานเสริม', 'โบนัส', 'ดอกเบี้ย/ปันผล', 'อื่นๆ'],
+  };
+  const $ = (id) => document.getElementById(id);
+  const fmt = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dateFmt = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short' });
+
+  let transactions = [];
+  let currentMonth = todayISO().slice(0, 7);
+  let editingId = null;
+  let store = null;       // db collection when the cloud store is available
+  let downloads = null;
+
+  // ---------- helpers ----------
+  function todayISO() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+  function uid() {
+    return (crypto.randomUUID && crypto.randomUUID()) || Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+  function isValidTx(t) {
+    return t && typeof t.id === 'string' && (t.type === 'income' || t.type === 'expense')
+      && typeof t.amount === 'number' && isFinite(t.amount) && t.amount > 0
+      && /^\d{4}-\d{2}-\d{2}$/.test(t.date) && typeof t.category === 'string';
+  }
+  function shiftMonth(ym, delta) {
+    const [y, m] = ym.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 3000);
+  }
+  const selectedType = () => document.querySelector('input[name="type"]:checked').value;
+  function fillCategories(type, selected) {
+    const sel = $('category');
+    sel.innerHTML = '';
+    const opts = [...CATEGORIES[type]];
+    if (selected && !opts.includes(selected)) opts.push(selected);
+    for (const c of opts) { const o = document.createElement('option'); o.value = o.textContent = c; sel.appendChild(o); }
+    if (selected) sel.value = selected;
+  }
+
+  // ---------- storage (cloud db, else this browser) ----------
+  function lsLoad() {
+    try { const d = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); return Array.isArray(d) ? d.filter(isValidTx) : []; }
+    catch { return []; }
+  }
+  function lsSave() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(transactions)); } catch { toast('บันทึกในเบราว์เซอร์ไม่สำเร็จ'); }
+  }
+  async function putTx(t) {
+    if (store) {
+      const { id, ...body } = t;
+      await store.doc(id).set(body);
+    } else {
+      const i = transactions.findIndex((x) => x.id === t.id);
+      i >= 0 ? (transactions[i] = t) : transactions.push(t);
+      lsSave(); render();
+    }
+  }
+  async function deleteTx(id) {
+    if (store) await store.doc(id).delete();
+    else { transactions = transactions.filter((t) => t.id !== id); lsSave(); render(); }
+  }
+
+  async function initStorage() {
+    let db = null;
+    try { db = window.claude ? await window.claude.use('db') : null; } catch { db = null; }
+    if (!db) {
+      transactions = lsLoad();
+      $('status').textContent = 'เก็บข้อมูลในเบราว์เซอร์นี้';
+      $('storageHint').textContent = 'ตอนนี้ข้อมูลเก็บไว้ในเบราว์เซอร์นี้เท่านั้น ควรส่งออกไฟล์สำรองไว้เป็นระยะ';
+      render();
+      return;
+    }
+    store = db.collection('tx');
+    $('storageHint').textContent = 'ข้อมูลบันทึกไว้กับหน้านี้บนบัญชี Claude ของคุณ เปิดจากเครื่องไหนก็เห็นข้อมูลเดียวกัน';
+    const timer = setTimeout(() => { $('status').textContent = 'ยังเชื่อมต่อที่เก็บข้อมูลไม่ได้ ข้อมูลที่เห็นอาจไม่ล่าสุด'; }, 10000);
+    store.onSnapshot((snap) => {
+      transactions = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isValidTx);
+      if (!snap.metadata.fromCache) { clearTimeout(timer); $('status').textContent = 'ซิงก์ข้อมูลแล้ว'; }
+      render();
+    }, (e) => {
+      clearTimeout(timer);
+      $('status').textContent = 'โหลดข้อมูลไม่สำเร็จ (' + (e && e.code || 'error') + ') ลองเปิดหน้านี้ใหม่ภายหลัง';
+    });
+  }
+
+  // ---------- render ----------
+  function render() {
+    $('monthPicker').value = currentMonth;
+    const monthTx = transactions.filter((t) => t.date.startsWith(currentMonth))
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+    let income = 0, expense = 0;
+    for (const t of monthTx) t.type === 'income' ? (income += t.amount) : (expense += t.amount);
+    $('sumIncome').textContent = fmt.format(income);
+    $('sumExpense').textContent = fmt.format(expense);
+    const bal = income - expense;
+    $('sumBalance').textContent = fmt.format(bal);
+    $('balTile').classList.toggle('neg', bal < 0);
+    renderBreakdown(monthTx, expense);
+    renderList(monthTx);
+  }
+
+  function renderBreakdown(monthTx, total) {
+    const box = $('breakdown');
+    box.innerHTML = '';
+    const byCat = {};
+    for (const t of monthTx) if (t.type === 'expense') byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+    const rows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+    if (!rows.length) {
+      const p = document.createElement('p'); p.className = 'empty';
+      p.textContent = 'เมื่อบันทึกรายจ่าย จะเห็นสัดส่วนแยกตามหมวดหมู่ตรงนี้';
+      box.appendChild(p); return;
+    }
+    const max = rows[0][1];
+    for (const [cat, val] of rows) {
+      const row = document.createElement('div'); row.className = 'brow';
+      const name = document.createElement('span'); name.textContent = cat;
+      const track = document.createElement('div'); track.className = 'track';
+      const fill = document.createElement('div'); fill.className = 'fill'; fill.style.width = (val / max) * 100 + '%';
+      track.appendChild(fill);
+      const v = document.createElement('span'); v.className = 'val';
+      v.textContent = `${fmt.format(val)} (${total ? Math.round((val / total) * 100) : 0}%)`;
+      row.append(name, track, v); box.appendChild(row);
+    }
+  }
+
+  function renderList(monthTx) {
+    const list = $('txList');
+    const filter = $('filterType').value;
+    const shown = monthTx.filter((t) => filter === 'all' || t.type === filter);
+    list.innerHTML = '';
+    $('emptyMsg').hidden = shown.length > 0;
+    for (const t of shown) {
+      const li = document.createElement('li');
+      const main = document.createElement('div');
+      const cat = document.createElement('div'); cat.className = 'cat'; cat.textContent = t.category;
+      const [y, m, d] = t.date.split('-').map(Number);
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.textContent = dateFmt.format(new Date(y, m - 1, d)) + (t.note ? ` · ${t.note}` : '');
+      main.append(cat, meta);
+      const amt = document.createElement('div'); amt.className = 'amt ' + t.type;
+      amt.textContent = (t.type === 'income' ? '+' : '−') + fmt.format(t.amount);
+      const btns = document.createElement('div'); btns.className = 'row-btns';
+      const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'แก้ไข';
+      edit.onclick = () => startEdit(t.id);
+      const del = document.createElement('button'); del.type = 'button'; del.textContent = 'ลบ';
+      let armed = null;
+      del.onclick = async () => {
+        if (!armed) {
+          del.textContent = 'ยืนยันลบ'; del.classList.add('danger');
+          armed = setTimeout(() => { armed = null; del.textContent = 'ลบ'; del.classList.remove('danger'); }, 3000);
+          return;
+        }
+        clearTimeout(armed);
+        try { await deleteTx(t.id); if (editingId === t.id) resetForm(); toast('ลบรายการแล้ว'); }
+        catch { toast('ลบไม่สำเร็จ ลองอีกครั้ง'); }
+      };
+      btns.append(edit, del);
+      li.append(main, amt, btns);
+      list.appendChild(li);
+    }
+  }
+
+  // ---------- form ----------
+  function resetForm() {
+    editingId = null;
+    $('txForm').reset();
+    $('date').value = currentMonth === todayISO().slice(0, 7) ? todayISO() : `${currentMonth}-01`;
+    fillCategories(selectedType());
+    $('formTitle').textContent = 'เพิ่มรายการ';
+    $('submitBtn').textContent = 'บันทึก';
+    $('cancelEdit').hidden = true;
+  }
+  function startEdit(id) {
+    const t = transactions.find((x) => x.id === id);
+    if (!t) return;
+    editingId = id;
+    (t.type === 'income' ? $('typeIncome') : $('typeExpense')).checked = true;
+    fillCategories(t.type, t.category);
+    $('amount').value = t.amount; $('date').value = t.date; $('note').value = t.note || '';
+    $('formTitle').textContent = 'แก้ไขรายการ';
+    $('submitBtn').textContent = 'บันทึกการแก้ไข';
+    $('cancelEdit').hidden = false;
+    $('txForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('amount').focus({ preventScroll: true });
+  }
+
+  $('txForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const amount = Math.round(parseFloat($('amount').value) * 100) / 100;
+    if (!(amount > 0)) return;
+    const existing = editingId && transactions.find((x) => x.id === editingId);
+    const tx = {
+      id: editingId || uid(),
+      createdAt: existing ? (existing.createdAt || 0) : Date.now(),
+      type: selectedType(), amount, date: $('date').value,
+      category: $('category').value, note: $('note').value.trim(),
+    };
+    $('submitBtn').disabled = true;
+    try {
+      await putTx(tx);
+      toast(existing ? 'แก้ไขรายการแล้ว' : 'บันทึกรายการแล้ว');
+      currentMonth = tx.date.slice(0, 7);
+      resetForm(); render();
+    } catch (err) {
+      toast(err && err.code === 'permission_denied' ? 'บัญชีนี้ไม่มีสิทธิ์บันทึกข้อมูลในหน้านี้' : 'บันทึกไม่สำเร็จ ลองอีกครั้ง');
+    } finally { $('submitBtn').disabled = false; }
+  });
+
+  document.querySelectorAll('input[name="type"]').forEach((r) => r.addEventListener('change', () => fillCategories(selectedType())));
+  $('cancelEdit').onclick = resetForm;
+  $('filterType').onchange = render;
+  const goMonth = (ym) => { currentMonth = ym; if (!editingId) resetForm(); render(); };
+  $('prevMonth').onclick = () => goMonth(shiftMonth(currentMonth, -1));
+  $('nextMonth').onclick = () => goMonth(shiftMonth(currentMonth, 1));
+  $('monthPicker').onchange = (e) => { if (e.target.value) goMonth(e.target.value); };
+
+  // ---------- backup ----------
+  async function saveFile(filename, data) {
+    if (!downloads) { toast('หน้านี้ดาวน์โหลดไฟล์ไม่ได้ในมุมมองนี้'); return; }
+    try { await downloads.save({ filename, data }); }
+    catch (e) { if (e && e.code !== 'dismissed' && e.code !== 'declined') toast('บันทึกไฟล์ไม่สำเร็จ'); }
+  }
+  $('exportJson').onclick = () => saveFile(`transactions-${todayISO()}.json`, JSON.stringify(transactions, null, 2));
+  $('exportCsv').onclick = () => {
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [['วันที่', 'ประเภท', 'หมวดหมู่', 'จำนวนเงิน', 'บันทึก'].map(esc).join(',')];
+    for (const t of [...transactions].sort((a, b) => a.date.localeCompare(b.date)))
+      lines.push([t.date, t.type === 'income' ? 'รายรับ' : 'รายจ่าย', t.category, t.amount.toFixed(2), t.note].map(esc).join(','));
+    saveFile(`transactions-${todayISO()}.csv`, '﻿' + lines.join('\r\n'));
+  };
+  $('importJson').onchange = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    let data;
+    try { data = JSON.parse(await file.text()); if (!Array.isArray(data)) throw 0; }
+    catch { toast('ไฟล์ไม่ถูกต้อง ต้องเป็นไฟล์ JSON ที่ส่งออกจากหน้านี้'); return; }
+    const ids = new Set(transactions.map((t) => t.id));
+    const added = data.filter((t) => isValidTx(t) && !ids.has(t.id));
+    let ok = 0;
+    for (const t of added) {
+      try { await putTx({ createdAt: 0, note: '', ...t }); ok++; } catch { /* skip */ }
+    }
+    toast(`นำเข้า ${ok} รายการ ข้าม ${data.length - ok} รายการที่ซ้ำหรือไม่ถูกต้อง`);
+  };
+
+  // ---------- quick entry ----------
+  const EXP_KW = [
+    ['สาธารณูปโภค', ['ค่าไฟ', 'ค่าน้ำ', 'ค่าเน็ต', 'อินเทอร์เน็ต', 'อินเตอร์เน็ต', 'ค่าโทร', 'ค่ามือถือ', 'โทรศัพท์']],
+    ['ที่พัก/ค่าเช่า', ['ค่าเช่า', 'ค่าห้อง', 'ค่าหอ', 'คอนโด', 'ผ่อนบ้าน', 'ค่าส่วนกลาง']],
+    ['เดินทาง', ['น้ำมัน', 'แท็กซี่', 'แท๊กซี่', 'taxi', 'grab', 'bolt', 'bts', 'mrt', 'ทางด่วน', 'มอไซค์', 'วินมอ', 'ค่ารถ', 'รถ', 'เรือ', 'เครื่องบิน', 'จอดรถ']],
+    ['สุขภาพ', ['โรงพยาบาล', 'คลินิก', 'หมอ', 'ยา', 'ฟิตเนส', 'ทำฟัน', 'ประกัน']],
+    ['การศึกษา', ['หนังสือ', 'คอร์ส', 'เรียน', 'ค่าเทอม']],
+    ['บันเทิง', ['หนัง', 'netflix', 'spotify', 'youtube', 'เกม', 'คอนเสิร์ต', 'เที่ยว', 'เบียร์', 'เหล้า', 'คาราโอเกะ']],
+    ['ช้อปปิ้ง', ['เสื้อ', 'กางเกง', 'รองเท้า', 'กระเป๋า', 'shopee', 'lazada', 'ช้อป', 'ซื้อของ']],
+    ['อาหาร', ['กิน', 'ข้าว', 'กาแฟ', 'ชา', 'น้ำ', 'ขนม', 'อาหาร', 'ก๋วยเตี๋ยว', 'ส้มตำ', 'ชาบู', 'หมูกระทะ', 'บุฟเฟ่ต์', 'ผลไม้', 'นม', 'มื้อ', 'เซเว่น', '7-11', 'starbucks', 'kfc', 'mcdonald']],
+  ];
+  const INC_KW = [
+    ['เงินเดือน', ['เงินเดือน', 'salary']],
+    ['โบนัส', ['โบนัส']],
+    ['ดอกเบี้ย/ปันผล', ['ดอกเบี้ย', 'ปันผล']],
+    ['งานเสริม', ['ฟรีแลนซ์', 'งานเสริม', 'ขายของ', 'ขายได้', 'รายได้']],
+    ['อื่นๆ', ['ได้เงิน', 'รับเงิน', 'เงินเข้า', 'ได้คืน', 'คืนเงิน', 'ถูกหวย']],
+  ];
+  const matchKw = (table, s) => { const low = s.toLowerCase(); for (const [cat, kws] of table) if (kws.some((k) => low.includes(k))) return cat; return null; };
+  function isoOffset(days) {
+    const d = new Date(); d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  // "ข้าว 50 กาแฟ 65" -> two items; returns null when no amount is found
+  function parseQuick(raw) {
+    let s = raw.trim();
+    let date = todayISO();
+    if (s.includes('เมื่อวานซืน')) { date = isoOffset(-2); s = s.replace(/เมื่อวานซืน/g, ' '); }
+    else if (s.includes('เมื่อวาน')) { date = isoOffset(-1); s = s.replace(/เมื่อวาน/g, ' '); }
+    const forceIncome = /^\+/.test(s);
+    s = s.replace(/^[+\-]\s*/, '');
+    const re = /(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?\s*(?:บาท|฿|บ\.)?/g;
+    const hits = [...s.matchAll(re)];
+    if (!hits.length) return null;
+    const descBefore = s.slice(0, hits[0].index).trim() !== '';
+    const items = hits.map((m, i) => {
+      const desc = descBefore
+        ? s.slice(i ? hits[i - 1].index + hits[i - 1][0].length : 0, m.index)
+        : s.slice(m.index + m[0].length, i + 1 < hits.length ? hits[i + 1].index : s.length);
+      const note = desc.replace(/บาท|฿/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+      const amount = Math.round(parseFloat(m[1].replace(/,/g, '') + (m[2] ? '.' + m[2] : '')) * 100) / 100;
+      const incCat = matchKw(INC_KW, note);
+      const type = forceIncome || incCat ? 'income' : 'expense';
+      const category = type === 'income' ? (incCat || 'อื่นๆ') : (matchKw(EXP_KW, note) || 'อื่นๆ');
+      return { type, amount, category, note, date };
+    }).filter((t) => t.amount > 0);
+    return items.length ? items : null;
+  }
+
+  async function saveItems(items) {
+    let ok = 0;
+    for (const it of items) {
+      try { await putTx({ id: uid(), createdAt: Date.now() + ok, ...it }); ok++; } catch { /* reported below */ }
+    }
+    if (ok) { currentMonth = items[items.length - 1].date.slice(0, 7); if (!editingId) resetForm(); render(); }
+    return ok;
+  }
+
+  $('quickForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = $('quickText').value.trim();
+    if (!text) return;
+    if (dict && dict.active()) await dict.stop().catch(() => {});
+    const items = parseQuick(text);
+    if (!items) {
+      if (sample) { await aiParseText(text); return; }
+      toast('ไม่เจอจำนวนเงิน ลองพิมพ์เป็นตัวเลข เช่น "กินข้าว 50"');
+      return;
+    }
+    $('quickSubmit').disabled = true;
+    const ok = await saveItems(items);
+    $('quickSubmit').disabled = false;
+    if (ok === items.length) {
+      $('quickText').value = '';
+      toast('จดแล้ว: ' + items.map((t) => `${t.category} ${t.type === 'income' ? '+' : ''}฿${fmt.format(t.amount)}`).join(', '));
+    } else toast(`บันทึกได้ ${ok} จาก ${items.length} รายการ ลองอีกครั้ง`);
+  });
+
+  // ---------- review drafts (from receipt or Claude) ----------
+  let draft = [];
+  function showDraft(items, title) {
+    draft = items;
+    $('draftTitle').textContent = title;
+    renderDraft();
+    $('draftPanel').hidden = false;
+    $('draftPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function renderDraft() {
+    const box = $('draftList');
+    box.innerHTML = '';
+    draft.forEach((it, i) => {
+      const row = document.createElement('div'); row.className = 'draft-row';
+      const type = document.createElement('select'); type.setAttribute('aria-label', 'ประเภท');
+      for (const [v, l] of [['expense', 'รายจ่าย'], ['income', 'รายรับ']]) { const o = document.createElement('option'); o.value = v; o.textContent = l; type.appendChild(o); }
+      type.value = it.type;
+      const cat = document.createElement('select'); cat.setAttribute('aria-label', 'หมวดหมู่');
+      const fillCat = () => {
+        cat.innerHTML = '';
+        const opts = [...CATEGORIES[it.type]]; if (!opts.includes(it.category)) it.category = 'อื่นๆ';
+        for (const c of opts) { const o = document.createElement('option'); o.value = o.textContent = c; cat.appendChild(o); }
+        cat.value = it.category;
+      };
+      fillCat();
+      const note = document.createElement('input'); note.type = 'text'; note.value = it.note; note.maxLength = 100;
+      note.className = 'd-note'; note.setAttribute('aria-label', 'บันทึก');
+      const amt = document.createElement('input'); amt.type = 'number'; amt.step = '0.01'; amt.min = '0.01'; amt.value = it.amount;
+      amt.inputMode = 'decimal'; amt.setAttribute('aria-label', 'จำนวนเงิน');
+      const date = document.createElement('input'); date.type = 'date'; date.value = it.date; date.setAttribute('aria-label', 'วันที่');
+      const rm = document.createElement('button'); rm.type = 'button'; rm.textContent = '✕'; rm.setAttribute('aria-label', 'เอารายการนี้ออก');
+      type.onchange = () => { it.type = type.value; fillCat(); };
+      cat.onchange = () => { it.category = cat.value; };
+      note.oninput = () => { it.note = note.value; };
+      amt.oninput = () => { it.amount = Math.round(parseFloat(amt.value) * 100) / 100; updateDraftTotal(); };
+      date.onchange = () => { it.date = date.value; };
+      rm.onclick = () => { draft.splice(i, 1); draft.length ? renderDraft() : closeDraft(); };
+      row.append(type, amt, note, cat, rm);
+      row.insertBefore(date, cat);
+      box.appendChild(row);
+    });
+    updateDraftTotal();
+  }
+  function updateDraftTotal() {
+    const sum = draft.reduce((s, t) => s + (t.amount > 0 ? (t.type === 'income' ? t.amount : -t.amount) : 0), 0);
+    $('draftTotal').textContent = `${draft.length} รายการ · สุทธิ ${fmt.format(sum)} บาท`;
+  }
+  function closeDraft() { draft = []; $('draftPanel').hidden = true; $('draftList').innerHTML = ''; }
+  $('draftCancel').onclick = closeDraft;
+  $('draftSave').onclick = async () => {
+    const bad = draft.findIndex((t) => !(t.amount > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(t.date));
+    if (bad >= 0) { toast(`รายการที่ ${bad + 1} ยังไม่มีจำนวนเงินหรือวันที่`); return; }
+    $('draftSave').disabled = true;
+    const items = draft.map((t) => ({ type: t.type, amount: t.amount, category: t.category, note: (t.note || '').trim(), date: t.date }));
+    const ok = await saveItems(items);
+    $('draftSave').disabled = false;
+    if (ok === items.length) { closeDraft(); $('quickText').value = ''; toast(`บันทึก ${ok} รายการแล้ว`); }
+    else toast(`บันทึกได้ ${ok} จาก ${items.length} รายการ ลองอีกครั้ง`);
+  };
+
+  // ---------- Claude: free-text and receipt reading ----------
+  let sample = null;
+  let aiCtl = null;
+  function aiBusy(msg) {
+    $('aiStatusText').textContent = msg; $('aiStatus').hidden = !msg;
+    $('receiptInput').disabled = !!msg; $('quickSubmit').disabled = !!msg;
+  }
+  $('aiStop').onclick = () => aiCtl && aiCtl.abort();
+  function normalizeAi(raw) {
+    const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.items) ? raw.items : []);
+    return list.map((x) => {
+      const type = x && x.type === 'income' ? 'income' : 'expense';
+      const amount = Math.round(Math.abs(Number(x && x.amount)) * 100) / 100;
+      const category = CATEGORIES[type].includes(x && x.category) ? x.category : 'อื่นๆ';
+      const date = x && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? x.date : todayISO();
+      return { type, amount: isFinite(amount) ? amount : 0, category, note: String((x && x.note) || '').slice(0, 100), date };
+    }).filter((t) => t.amount > 0);
+  }
+  function aiError(e) {
+    const code = e && e.code;
+    if (code === 'cancelled') return;
+    if (code === 'not_granted') {
+      sample = null; $('receiptRow').hidden = true;
+      toast('ไม่ได้อนุญาตให้ใช้ Claude จึงซ่อนการอ่านใบเสร็จไว้จนกว่าจะเปิดหน้านี้ใหม่');
+    } else if (code === 'rate_limited') toast('ใช้งานถี่เกินไป รอสักครู่แล้วลองใหม่');
+    else if (code === 'invalid_json') toast('อ่านผลลัพธ์ไม่สำเร็จ ลองใหม่อีกครั้ง หรือถ่ายรูปให้ชัดขึ้น');
+    else toast('เรียกใช้ Claude ไม่สำเร็จ' + (code ? ` (${code})` : ''));
+  }
+  const RULES = () => `วันนี้คือ ${todayISO()}
+หมวดรายจ่ายที่ใช้ได้: ${CATEGORIES.expense.join(', ')}
+หมวดรายรับที่ใช้ได้: ${CATEGORIES.income.join(', ')}
+ตอบเป็น JSON อย่างเดียวในรูปแบบ {"items":[{"type":"expense"|"income","amount":ตัวเลขบาท,"category":"ชื่อหมวดจากรายการด้านบน","note":"คำอธิบายสั้นภาษาไทย","date":"YYYY-MM-DD"}]}
+ถ้าไม่เจอรายการที่มีจำนวนเงินเลย ให้ตอบ {"items":[]}`;
+
+  async function aiParseText(text) {
+    aiCtl = new AbortController();
+    aiBusy('ไม่เจอตัวเลขในข้อความ กำลังให้ Claude ช่วยอ่าน…');
+    try {
+      const raw = await sample.json(`แปลงข้อความบันทึกรายรับรายจ่ายต่อไปนี้เป็นรายการ ตัวเลขที่เขียนเป็นคำ (เช่น ห้าสิบ) ให้แปลงเป็นตัวเลข\n${RULES()}\n\nข้อความ:\n${text}`, { modelTier: 'quick', signal: aiCtl.signal });
+      const items = normalizeAi(raw);
+      if (items.length) showDraft(items, 'ตรวจรายการที่ Claude อ่านได้ก่อนบันทึก');
+      else toast('ไม่เจอจำนวนเงินในข้อความนี้ ลองใส่ตัวเลข เช่น "กินข้าว 50"');
+    } catch (e) { aiError(e); }
+    finally { aiBusy(''); aiCtl = null; }
+  }
+
+  let imageLimits = null;
+  $('receiptInput').onchange = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file || !sample) return;
+    if (imageLimits && file.size > imageLimits.maxInputBytes) { toast('รูปใหญ่เกินไป ลองถ่ายใหม่หรือย่อรูปก่อน'); return; }
+    aiCtl = new AbortController();
+    aiBusy('กำลังอ่านใบเสร็จ อาจใช้เวลาสักครู่…');
+    try {
+      const raw = await sample.json(`รูปที่แนบคือใบเสร็จหรือสลิปการจ่ายเงิน อ่านรายการสินค้าแต่ละบรรทัดพร้อมราคาสุทธิ (หักส่วนลดของบรรทัดนั้นแล้ว) ทุกรายการเป็นรายจ่าย ยกเว้นเป็นสลิปรับเงิน ใช้วันที่บนใบเสร็จ (แปลง พ.ศ. เป็น ค.ศ.) ถ้าอ่านวันที่ไม่ได้ให้ใช้วันนี้ ถ้าแยกรายการไม่ได้ ให้ตอบรายการเดียวเป็นยอดรวมทั้งหมด ใส่ชื่อร้านไว้ต้นคำอธิบายถ้ามี\n${RULES()}`, { images: [file], signal: aiCtl.signal });
+      const items = normalizeAi(raw);
+      if (items.length) showDraft(items, 'ตรวจรายการจากใบเสร็จก่อนบันทึก');
+      else toast('อ่านรายการจากรูปนี้ไม่ได้ ลองถ่ายให้เห็นใบเสร็จชัดๆ เต็มใบ');
+    } catch (err) { aiError(err); }
+    finally { aiBusy(''); aiCtl = null; }
+  };
+
+  // ---------- dictation ----------
+  let dict = null;
+  function setupDictation(d) {
+    dict = d;
+    const btn = $('micBtn');
+    btn.hidden = false;
+    d.onPartial(({ text }) => { $('partial').textContent = text; $('partial').hidden = !text; });
+    d.onFinal(({ text }) => {
+      const box = $('quickText');
+      box.value = box.value ? box.value + text : text.trimStart();
+    });
+    d.onState(({ state, reason }) => {
+      const on = state !== 'idle';
+      btn.classList.toggle('listening', on);
+      btn.setAttribute('aria-pressed', String(on));
+      btn.title = on ? 'หยุดฟัง' : 'พูดแทนพิมพ์';
+      if (!on) {
+        $('partial').hidden = true;
+        if (reason === 'not_granted' || reason === 'unavailable') { btn.hidden = true; toast('ใช้ไมค์ในหน้านี้ไม่ได้ พิมพ์แทนได้เลย'); }
+        else if (reason === 'rate_limited') toast('ไมค์ไม่ว่าง ลองใหม่อีกสักครู่');
+        else if (reason === 'upstream_error') toast('ถอดเสียงไม่สำเร็จ ลองใหม่อีกครั้ง');
+        else if ((reason === 'stopped' || reason === 'viewer_stopped') && $('quickText').value.trim()) $('quickText').focus();
+      }
+    });
+    btn.onclick = () => {
+      if (d.active()) { d.stop().catch(() => {}); return; }
+      d.start({ language: 'th' }).catch((e) => {
+        const code = e && e.code;
+        if (code === 'not_granted' || code === 'unavailable') { btn.hidden = true; toast('ใช้ไมค์ในหน้านี้ไม่ได้ พิมพ์แทนได้เลย'); }
+        else if (code === 'dismissed' || code === 'stopped') { /* viewer closed it */ }
+        else toast('เริ่มฟังไม่สำเร็จ ลองใหม่อีกครั้ง');
+      });
+    };
+  }
+
+  resetForm();
+  render();
+  initStorage();
+  (async () => {
+    if (!window.claude) return;
+    try {
+      const s = await window.claude.use('sample');
+      if (s) {
+        sample = s;
+        const lim = await s.limits().catch(() => null);
+        if (lim && lim.images) {
+          imageLimits = lim.images;
+          if (lim.images.mediaTypes && lim.images.mediaTypes.length) $('receiptInput').accept = lim.images.mediaTypes.join(',');
+          $('receiptRow').hidden = false;
+        }
+      }
+    } catch { sample = null; }
+  })();
+  (async () => {
+    if (!window.claude) return;
+    try { const d = await window.claude.use('dictation'); if (d) setupDictation(d); } catch { /* typing still works */ }
+  })();
+  (async () => {
+    try { downloads = window.claude ? await window.claude.use('downloads') : null; } catch { downloads = null; }
+    if (!downloads) { $('exportJson').hidden = true; $('exportCsv').hidden = true; }
+  })();
+})();
+</script>
