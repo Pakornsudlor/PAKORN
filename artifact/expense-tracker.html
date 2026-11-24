@@ -43,6 +43,8 @@ body {
 h1 { margin: 0; font-size: 1.35rem; font-weight: 600; text-wrap: balance; }
 h2 { margin: 0; font-size: 1rem; font-weight: 600; }
 .status { font-size: .8rem; color: var(--muted); }
+.today { font-size: .95rem; font-weight: 500; color: var(--accent); }
+.today span { color: var(--muted); font-weight: 400; }
 .month-nav { display: flex; gap: 6px; align-items: center; }
 input, select, button {
   font: inherit; color: var(--text); background: var(--surface);
@@ -127,6 +129,7 @@ button.danger { border-color: var(--expense); color: var(--expense); }
   <header class="top">
     <div>
       <h1>รายรับรายจ่าย</h1>
+      <div class="today" id="todayLine"></div>
       <div class="status" id="status">กำลังโหลดข้อมูล…</div>
     </div>
     <div class="month-nav">
@@ -320,9 +323,22 @@ button.danger { border-color: var(--expense); color: var(--expense); }
     });
   }
 
+  // ---------- today line ----------
+  const fullDateFmt = new Intl.DateTimeFormat('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  function renderToday() {
+    const today = todayISO();
+    const spent = transactions.reduce((s, t) => s + (t.type === 'expense' && t.date === today ? t.amount : 0), 0);
+    const line = $('todayLine');
+    line.textContent = 'วันนี้ ' + fullDateFmt.format(new Date());
+    const extra = document.createElement('span');
+    extra.textContent = spent > 0 ? ` · ใช้ไปแล้ว ${fmt.format(spent)} บาท` : ' · ยังไม่ได้จดรายจ่ายวันนี้';
+    line.appendChild(extra);
+  }
+
   // ---------- render ----------
   function render() {
     $('monthPicker').value = currentMonth;
+    renderToday();
     const monthTx = transactions.filter((t) => t.date.startsWith(currentMonth))
       .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
     let income = 0, expense = 0;
@@ -721,6 +737,7 @@ button.danger { border-color: var(--expense); color: var(--expense); }
   resetForm();
   render();
   initStorage();
+  setInterval(renderToday, 60000);
   (async () => {
     if (!window.claude) return;
     try {
