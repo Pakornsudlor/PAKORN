@@ -83,6 +83,24 @@ button.danger { border-color: var(--expense); color: var(--expense); }
 .val { font-family: var(--font-num); font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .list-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.list-count { color: var(--muted); font-size: .85rem; }
+details.filters { display: block; padding: 0; }
+details.filters summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: 12px 16px; list-style: none; }
+details.filters summary::-webkit-details-marker { display: none; }
+details.filters summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+details.filters[open] summary::after { content: "▴"; }
+.f-badge { background: var(--accent); color: var(--surface); border-radius: 999px; padding: 0 8px; font-size: .75rem; font-weight: 600; }
+.f-body { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px; }
+.f-label { font-size: .85rem; color: var(--muted); }
+.f-body .grid { grid-template-columns: 1fr 1fr; }
+.f-body .grid label:nth-child(-n+2) { grid-column: 1 / -1; }
+.f-label span { font-size: .8rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: .85rem; cursor: pointer; user-select: none; }
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scope { margin: 0 0 -8px; font-size: .85rem; color: var(--muted); }
 .tx-list { list-style: none; margin: 0; padding: 0; }
 .tx-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
 .tx-list li:first-child { border-top: 0; }
@@ -139,7 +157,32 @@ button.danger { border-color: var(--expense); color: var(--expense); }
     </div>
   </header>
 
-  <section class="summary" aria-label="สรุปเดือนนี้">
+  <details class="panel filters" id="filterPanel">
+    <summary><span>ตัวกรอง</span><span class="f-badge" id="filterBadge" hidden></span></summary>
+    <div class="f-body">
+      <div class="grid">
+        <label>ค้นหาคำ<input type="search" id="fSearch" placeholder="เช่น spay หรือ กาแฟ"></label>
+        <label>ประเภท
+          <select id="filterType">
+            <option value="all">ทั้งหมด</option>
+            <option value="income">รายรับ</option>
+            <option value="expense">รายจ่าย</option>
+          </select>
+        </label>
+        <label>ตั้งแต่วันที่<input type="date" id="fFrom"></label>
+        <label>ถึงวันที่<input type="date" id="fTo"></label>
+        <label>จำนวนเงินตั้งแต่ (บาท)<input type="number" id="fMin" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+        <label>ถึง (บาท)<input type="number" id="fMax" min="0" step="0.01" inputmode="decimal" placeholder="ไม่จำกัด"></label>
+      </div>
+      <div class="f-label">หมวดหมู่ <span>(ไม่เลือก = ทุกหมวด)</span></div>
+      <div class="chips" id="fCats"></div>
+      <div class="actions"><button type="button" id="fClear">ล้างตัวกรอง</button></div>
+      <p class="hint" id="filterNote"></p>
+    </div>
+  </details>
+
+  <p class="scope" id="scopeLine"></p>
+  <section class="summary" aria-label="สรุปตามตัวกรอง">
     <div class="tile income"><span>รายรับ (บาท)</span><strong id="sumIncome">0.00</strong></div>
     <div class="tile expense"><span>รายจ่าย (บาท)</span><strong id="sumExpense">0.00</strong></div>
     <div class="tile" id="balTile"><span>คงเหลือ (บาท)</span><strong id="sumBalance">0.00</strong></div>
@@ -200,12 +243,8 @@ button.danger { border-color: var(--expense); color: var(--expense); }
 
   <section class="panel">
     <div class="list-head">
-      <h2>รายการในเดือน</h2>
-      <select id="filterType" aria-label="กรองประเภท">
-        <option value="all">ทั้งหมด</option>
-        <option value="income">รายรับ</option>
-        <option value="expense">รายจ่าย</option>
-      </select>
+      <h2 id="listTitle">รายการในเดือน</h2>
+      <span class="list-count" id="listCount"></span>
     </div>
     <ul id="txList" class="tx-list"></ul>
     <p id="emptyMsg" class="empty" hidden>ยังไม่มีรายการในเดือนนี้ เพิ่มรายการแรกได้จากฟอร์มด้านบน</p>
@@ -336,20 +375,64 @@ button.danger { border-color: var(--expense); color: var(--expense); }
   }
 
   // ---------- render ----------
+  // ---------- filters ----------
+  const catSel = new Set();
+  const monthFmt = new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' });
+  const shortFmt = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+  const isoToDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d || 1); };
+  function readFilters() {
+    const num = (id) => { const v = parseFloat($(id).value); return isFinite(v) ? v : null; };
+    return { q: $('fSearch').value.trim().toLowerCase(), type: $('filterType').value, from: $('fFrom').value, to: $('fTo').value, min: num('fMin'), max: num('fMax') };
+  }
+  function applyFilters(list, f) {
+    const range = !!(f.from || f.to);
+    return list.filter((t) => {
+      if (range) {
+        if (f.from && t.date < f.from) return false;
+        if (f.to && t.date > f.to) return false;
+      } else if (!t.date.startsWith(currentMonth)) return false;
+      if (f.type !== 'all' && t.type !== f.type) return false;
+      if (catSel.size && !catSel.has(t.category)) return false;
+      if (f.min !== null && t.amount < f.min) return false;
+      if (f.max !== null && t.amount > f.max) return false;
+      if (f.q && !((t.note || '') + ' ' + t.category).toLowerCase().includes(f.q)) return false;
+      return true;
+    });
+  }
+
   function render() {
     $('monthPicker').value = currentMonth;
     renderToday();
-    const monthTx = transactions.filter((t) => t.date.startsWith(currentMonth))
+    const f = readFilters();
+    const range = !!(f.from || f.to);
+    const shown = applyFilters(transactions, f)
       .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
     let income = 0, expense = 0;
-    for (const t of monthTx) t.type === 'income' ? (income += t.amount) : (expense += t.amount);
+    for (const t of shown) t.type === 'income' ? (income += t.amount) : (expense += t.amount);
     $('sumIncome').textContent = fmt.format(income);
     $('sumExpense').textContent = fmt.format(expense);
     const bal = income - expense;
     $('sumBalance').textContent = fmt.format(bal);
     $('balTile').classList.toggle('neg', bal < 0);
-    renderBreakdown(monthTx, expense);
-    renderList(monthTx);
+
+    const others = [f.q, f.type !== 'all', f.min !== null || f.max !== null, catSel.size > 0].filter(Boolean).length;
+    const active = others + (range ? 1 : 0);
+    $('filterBadge').hidden = !active;
+    $('filterBadge').textContent = `${active} อย่าง`;
+    const period = range
+      ? `${f.from ? shortFmt.format(isoToDate(f.from)) : 'ทั้งหมดก่อนหน้า'} – ${f.to ? shortFmt.format(isoToDate(f.to)) : 'ล่าสุด'}`
+      : monthFmt.format(isoToDate(currentMonth));
+    $('scopeLine').textContent = 'สรุป ' + period + (others ? ` · กรองอยู่ ${others} อย่าง` : '');
+    $('filterNote').textContent = range
+      ? 'กำลังดูตามช่วงวันที่ ถ้ากดเปลี่ยนเดือนด้านบน ช่วงวันที่จะถูกล้าง'
+      : 'ถ้าไม่ใส่ช่วงวันที่ จะดูเฉพาะเดือนที่เลือกด้านบน';
+    $('listTitle').textContent = range ? 'รายการในช่วงที่เลือก' : 'รายการในเดือน';
+    $('listCount').textContent = `${shown.length} รายการ`;
+    $('emptyMsg').textContent = active
+      ? 'ไม่มีรายการที่ตรงกับตัวกรอง ลองกด "ล้างตัวกรอง"'
+      : 'ยังไม่มีรายการในเดือนนี้ เพิ่มรายการแรกได้จากฟอร์มด้านบน';
+    renderBreakdown(shown, expense);
+    renderList(shown);
   }
 
   function renderBreakdown(monthTx, total) {
@@ -376,10 +459,8 @@ button.danger { border-color: var(--expense); color: var(--expense); }
     }
   }
 
-  function renderList(monthTx) {
+  function renderList(shown) {
     const list = $('txList');
-    const filter = $('filterType').value;
-    const shown = monthTx.filter((t) => filter === 'all' || t.type === filter);
     list.innerHTML = '';
     $('emptyMsg').hidden = shown.length > 0;
     for (const t of shown) {
@@ -461,8 +542,23 @@ button.danger { border-color: var(--expense); color: var(--expense); }
 
   document.querySelectorAll('input[name="type"]').forEach((r) => r.addEventListener('change', () => fillCategories(selectedType())));
   $('cancelEdit').onclick = resetForm;
-  $('filterType').onchange = render;
-  const goMonth = (ym) => { currentMonth = ym; if (!editingId) resetForm(); render(); };
+  [...new Set([...CATEGORIES.expense, ...CATEGORIES.income])].forEach((c, i) => {
+    const lab = document.createElement('label'); lab.className = 'chip';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'fCat' + i; cb.value = c;
+    cb.onchange = () => { cb.checked ? catSel.add(c) : catSel.delete(c); render(); };
+    lab.append(cb, document.createTextNode(c));
+    $('fCats').appendChild(lab);
+  });
+  ['fSearch', 'fMin', 'fMax'].forEach((id) => $(id).addEventListener('input', render));
+  ['filterType', 'fFrom', 'fTo'].forEach((id) => $(id).addEventListener('change', render));
+  $('fClear').onclick = () => {
+    ['fSearch', 'fFrom', 'fTo', 'fMin', 'fMax'].forEach((id) => { $(id).value = ''; });
+    $('filterType').value = 'all';
+    catSel.clear();
+    document.querySelectorAll('#fCats input').forEach((cb) => { cb.checked = false; });
+    render();
+  };
+  const goMonth = (ym) => { currentMonth = ym; $('fFrom').value = ''; $('fTo').value = ''; if (!editingId) resetForm(); render(); };
   $('prevMonth').onclick = () => goMonth(shiftMonth(currentMonth, -1));
   $('nextMonth').onclick = () => goMonth(shiftMonth(currentMonth, 1));
   $('monthPicker').onchange = (e) => { if (e.target.value) goMonth(e.target.value); };
