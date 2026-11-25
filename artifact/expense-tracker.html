@@ -157,30 +157,6 @@ details.filters[open] summary::after { content: "▴"; }
     </div>
   </header>
 
-  <details class="panel filters" id="filterPanel">
-    <summary><span>ตัวกรอง</span><span class="f-badge" id="filterBadge" hidden></span></summary>
-    <div class="f-body">
-      <div class="grid">
-        <label>ค้นหาคำ<input type="search" id="fSearch" placeholder="เช่น spay หรือ กาแฟ"></label>
-        <label>ประเภท
-          <select id="filterType">
-            <option value="all">ทั้งหมด</option>
-            <option value="income">รายรับ</option>
-            <option value="expense">รายจ่าย</option>
-          </select>
-        </label>
-        <label>ตั้งแต่วันที่<input type="date" id="fFrom"></label>
-        <label>ถึงวันที่<input type="date" id="fTo"></label>
-        <label>จำนวนเงินตั้งแต่ (บาท)<input type="number" id="fMin" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
-        <label>ถึง (บาท)<input type="number" id="fMax" min="0" step="0.01" inputmode="decimal" placeholder="ไม่จำกัด"></label>
-      </div>
-      <div class="f-label">หมวดหมู่ <span>(ไม่เลือก = ทุกหมวด)</span></div>
-      <div class="chips" id="fCats"></div>
-      <div class="actions"><button type="button" id="fClear">ล้างตัวกรอง</button></div>
-      <p class="hint" id="filterNote"></p>
-    </div>
-  </details>
-
   <p class="scope" id="scopeLine"></p>
   <section class="summary" aria-label="สรุปตามตัวกรอง">
     <div class="tile income"><span>รายรับ (บาท)</span><strong id="sumIncome">0.00</strong></div>
@@ -240,6 +216,30 @@ details.filters[open] summary::after { content: "▴"; }
     <h2>รายจ่ายตามหมวดหมู่</h2>
     <div id="breakdown" class="breakdown"></div>
   </section>
+
+  <details class="panel filters" id="filterPanel">
+    <summary><span>ตัวกรอง</span><span class="f-badge" id="filterBadge" hidden></span></summary>
+    <div class="f-body">
+      <div class="grid">
+        <label>ค้นหาคำ<input type="search" id="fSearch" placeholder="เช่น spay หรือ กาแฟ"></label>
+        <label>ประเภท
+          <select id="filterType">
+            <option value="all">ทั้งหมด</option>
+            <option value="income">รายรับ</option>
+            <option value="expense">รายจ่าย</option>
+          </select>
+        </label>
+        <label>ตั้งแต่วันที่<input type="date" id="fFrom"></label>
+        <label>ถึงวันที่<input type="date" id="fTo"></label>
+        <label>จำนวนเงินตั้งแต่ (บาท)<input type="number" id="fMin" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+        <label>ถึง (บาท)<input type="number" id="fMax" min="0" step="0.01" inputmode="decimal" placeholder="ไม่จำกัด"></label>
+      </div>
+      <div class="f-label">หมวดหมู่ <span>(ไม่เลือก = ทุกหมวด)</span></div>
+      <div class="chips" id="fCats"></div>
+      <div class="actions"><button type="button" id="fClear">ล้างตัวกรอง</button></div>
+      <p class="hint" id="filterNote"></p>
+    </div>
+  </details>
 
   <section class="panel">
     <div class="list-head">
