@@ -89,8 +89,16 @@ button.danger { border-color: var(--expense); color: var(--expense); }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .panel-head button { padding: 4px 10px; font-size: .85rem; }
 .fill.over { background: var(--expense); }
-.bsub { font-size: .78rem; color: var(--muted); margin: -2px 0 4px 114px; overflow-wrap: anywhere; }
-@media (max-width: 560px) { .bsub { margin-left: 86px; } }
+.bname { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; display: flex; gap: 4px; align-items: baseline; min-width: 0; }
+.bname:hover { color: var(--accent); }
+.bname .caret { color: var(--muted); font-size: .75rem; width: .8em; flex: none; }
+.brow.lvl2 { font-size: .85rem; }
+.brow.lvl2 > :first-child { padding-left: 16px; }
+.brow.lvl2 .fill { opacity: .75; }
+.bitems { list-style: none; margin: 0 0 6px; padding: 0 0 0 32px; display: flex; flex-direction: column; gap: 2px; font-size: .8rem; color: var(--muted); }
+.bitems li { display: flex; justify-content: space-between; gap: 8px; }
+.bitems li span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.bitems li span:last-child { font-family: var(--font-num); white-space: nowrap; }
 .val.over { color: var(--expense); }
 .budget-total { font-size: .88rem; color: var(--muted); margin: 0; }
 .budget-total strong { color: var(--text); font-weight: 500; }
@@ -605,6 +613,15 @@ details.filters[open] summary::after { content: "▴"; }
     try { localStorage.setItem('pakorn-filters-v1', JSON.stringify({ ...f, cats: [...catSel] })); } catch { /* optional */ }
   }
 
+  const openCats = new Set(), openSubs = new Set();
+  function caretBtn(label, isOpen, onToggle) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'bname';
+    b.setAttribute('aria-expanded', String(isOpen));
+    const c = document.createElement('span'); c.className = 'caret'; c.textContent = isOpen ? '▾' : '▸';
+    const t = document.createElement('span'); t.textContent = label;
+    b.append(c, t); b.onclick = onToggle;
+    return b;
+  }
   const budgets = () => { const b = extra.settings.find((x) => x.id === 'budgets'); return (b && b.byCat) || {}; };
   function renderBreakdown(monthTx, total, range) {
     const box = $('breakdown');
@@ -644,7 +661,9 @@ details.filters[open] summary::after { content: "▴"; }
       const b = bud[cat] > 0 ? bud[cat] : 0;
       const over = b && val > b;
       const row = document.createElement('div'); row.className = 'brow';
-      const name = document.createElement('span'); name.textContent = cat;
+      const name = bySub[cat]
+        ? caretBtn(cat, openCats.has(cat), () => { openCats.has(cat) ? openCats.delete(cat) : openCats.add(cat); render(); })
+        : Object.assign(document.createElement('span'), { textContent: cat });
       const track = document.createElement('div'); track.className = 'track';
       const fill = document.createElement('div'); fill.className = 'fill' + (over ? ' over' : '');
       fill.style.width = (b ? Math.min(val / b, 1) : val / max) * 100 + '%';
@@ -655,10 +674,30 @@ details.filters[open] summary::after { content: "▴"; }
         : `${fmt.format(val)} (${total ? Math.round((val / total) * 100) : 0}%)`;
       if (b) v.title = over ? `เกินงบ ${fmt.format(val - b)} บาท` : `เหลือ ${fmt.format(b - val)} บาท`;
       row.append(name, track, v); box.appendChild(row);
-      if (bySub[cat]) {
-        const sub = document.createElement('div'); sub.className = 'bsub';
-        sub.textContent = Object.entries(bySub[cat]).sort((a, b) => b[1] - a[1]).map(([k, x]) => `${k} ${fmt.format(x)}`).join(' · ');
-        box.appendChild(sub);
+      if (bySub[cat] && openCats.has(cat)) {
+        for (const [k, x] of Object.entries(bySub[cat]).sort((a, b) => b[1] - a[1])) {
+          const key = cat + '|' + k;
+          const r2 = document.createElement('div'); r2.className = 'brow lvl2';
+          const n2 = caretBtn(k, openSubs.has(key), () => { openSubs.has(key) ? openSubs.delete(key) : openSubs.add(key); render(); });
+          const t2 = document.createElement('div'); t2.className = 'track';
+          const f2 = document.createElement('div'); f2.className = 'fill'; f2.style.width = (val ? x / val : 0) * 100 + '%';
+          t2.appendChild(f2);
+          const v2 = document.createElement('span'); v2.className = 'val';
+          v2.textContent = `${fmt.format(x)} (${val ? Math.round((x / val) * 100) : 0}%)`;
+          r2.append(n2, t2, v2); box.appendChild(r2);
+          if (openSubs.has(key)) {
+            const ul = document.createElement('ul'); ul.className = 'bitems';
+            const items = monthTx.filter((t) => t.type === 'expense' && t.category === cat && (t.sub || 'ไม่ระบุ') === k)
+              .sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
+            for (const t of items) {
+              const li = document.createElement('li');
+              const a = document.createElement('span'); a.textContent = `${dateFmt.format(isoToDate(t.date))} · ${t.note || k}`;
+              const b = document.createElement('span'); b.textContent = fmt.format(t.amount);
+              li.append(a, b); ul.appendChild(li);
+            }
+            box.appendChild(ul);
+          }
+        }
       }
     }
   }
