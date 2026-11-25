@@ -149,8 +149,12 @@ details.filters[open] summary::after { content: "▴"; }
 .tx-list { list-style: none; margin: 0; padding: 0; }
 .tx-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
 .tx-list li:first-child { border-top: 0; }
-.tx-list li.day { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  padding: 8px 10px; margin-top: 14px; border: 0; border-radius: 8px; background: var(--bg); }
+.tx-list li.day { display: block; padding: 0; margin-top: 10px; border: 0; }
+.day-btn { width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; border: 0; border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.day-btn:hover { background: var(--border); }
+.day-btn .caret { color: var(--muted); font-size: .75rem; display: inline-block; width: 1em; }
+.day-count { color: var(--muted); font-weight: 400; font-size: .82rem; white-space: nowrap; }
 .tx-list li.day:first-child { margin-top: 0; }
 .tx-list li.day + li { border-top: 0; }
 .day-date { font-weight: 600; }
@@ -892,27 +896,37 @@ details.filters[open] summary::after { content: "▴"; }
   function closeRecForm() { editingRec = null; $('recForm').hidden = true; $('recToggle').hidden = false; }
 
   const dayFmt = new Intl.DateTimeFormat('th-TH', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+  const dayOpen = new Map(); // date -> open/closed chosen by the viewer; today starts open, other days closed
   function renderList(shown) {
     const list = $('txList');
     list.innerHTML = '';
     $('emptyMsg').hidden = shown.length > 0;
     const today = todayISO(), yesterday = isoOffset(-1);
-    let lastDate = null;
+    let lastDate = null, dayShown = true;
     for (const t of shown) {
       if (t.date !== lastDate) {
         lastDate = t.date;
         const dayTx = shown.filter((x) => x.date === t.date);
         const exp = dayTx.reduce((a, x) => a + (x.type === 'expense' ? x.amount : 0), 0);
         const inc = dayTx.reduce((a, x) => a + (x.type === 'income' ? x.amount : 0), 0);
+        const isOpen = dayOpen.has(t.date) ? dayOpen.get(t.date) : t.date === today;
+        const date = t.date;
         const head = document.createElement('li'); head.className = 'day';
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'day-btn';
+        btn.setAttribute('aria-expanded', String(isOpen));
+        btn.onclick = () => { dayOpen.set(date, !isOpen); render(); };
         const dd = document.createElement('span'); dd.className = 'day-date';
+        const caret = document.createElement('span'); caret.className = 'caret'; caret.textContent = isOpen ? '▾' : '▸';
         const prefix = t.date === today ? 'วันนี้ · ' : t.date === yesterday ? 'เมื่อวาน · ' : '';
-        dd.textContent = prefix + dayFmt.format(isoToDate(t.date));
+        const cnt = document.createElement('span'); cnt.className = 'day-count'; cnt.textContent = ` · ${dayTx.length} รายการ`;
+        dd.append(caret, prefix + dayFmt.format(isoToDate(t.date)), cnt);
         const sum = document.createElement('span'); sum.className = 'day-sum';
         if (exp) { const e = document.createElement('span'); e.className = 'exp'; e.textContent = `จ่าย ${fmt.format(exp)}`; sum.appendChild(e); }
         if (inc) { const i = document.createElement('span'); i.className = 'inc'; i.textContent = `รับ ${fmt.format(inc)}`; sum.appendChild(i); }
-        head.append(dd, sum); list.appendChild(head);
+        btn.append(dd, sum); head.appendChild(btn); list.appendChild(head);
+        dayShown = isOpen;
       }
+      if (!dayShown) continue;
       const li = document.createElement('li'); li.className = 'item';
       const main = document.createElement('div');
       const cat = document.createElement('div'); cat.className = 'cat'; cat.textContent = catLabel(t);
