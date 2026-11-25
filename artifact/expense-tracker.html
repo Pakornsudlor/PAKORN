@@ -89,6 +89,8 @@ button.danger { border-color: var(--expense); color: var(--expense); }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .panel-head button { padding: 4px 10px; font-size: .85rem; }
 .fill.over { background: var(--expense); }
+.bsub { font-size: .78rem; color: var(--muted); margin: -2px 0 4px 114px; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .bsub { margin-left: 86px; } }
 .val.over { color: var(--expense); }
 .budget-total { font-size: .88rem; color: var(--muted); margin: 0; }
 .budget-total strong { color: var(--text); font-weight: 500; }
@@ -165,7 +167,7 @@ details.filters[open] summary::after { content: "▴"; }
 .ai-status button { padding: 4px 10px; font-size: .85rem; }
 .draft { border: 1px dashed var(--accent); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .draft h3 { margin: 0; font-size: .95rem; }
-.draft-row { display: grid; grid-template-columns: 96px 104px minmax(0, 1fr) 140px 120px auto; gap: 6px; align-items: center; }
+.draft-row { display: grid; grid-template-columns: 92px 96px minmax(0, 1fr) 136px 112px 104px auto; gap: 6px; align-items: center; }
 .draft-row input, .draft-row select { width: 100%; padding: 6px 8px; font-size: .9rem; }
 .draft-row button { padding: 6px 10px; }
 .draft-total { font-family: var(--font-num); font-size: .9rem; color: var(--muted); }
@@ -237,6 +239,7 @@ details.filters[open] summary::after { content: "▴"; }
           <label>จำนวนเงิน (บาท)<input type="number" id="amount" min="0.01" step="0.01" required inputmode="decimal" placeholder="0.00"></label>
           <label>วันที่<input type="date" id="date" required></label>
           <label>หมวดหมู่<select id="category" required></select></label>
+          <label id="subWrap" hidden>หมวดย่อย<select id="subcat"></select></label>
           <label>บันทึก<input type="text" id="note" maxlength="100" placeholder="เช่น ข้าวกลางวัน"></label>
         </div>
         <div class="actions">
@@ -345,6 +348,7 @@ details.filters[open] summary::after { content: "▴"; }
         </label>
         <label>จำนวนเงิน (บาท)<input type="number" id="recAmount" min="0.01" step="0.01" inputmode="decimal" required></label>
         <label>หมวดหมู่<select id="recCat"></select></label>
+        <label id="recSubWrap" hidden>หมวดย่อย<select id="recSub"></select></label>
         <label>บันทึก<input type="text" id="recNote" maxlength="100" required placeholder="เช่น spotify"></label>
         <label>จดทุกวันที่<input type="number" id="recDay" min="1" max="31" step="1" required></label>
         <label>เริ่มเดือน<input type="month" id="recStart" required></label>
@@ -374,9 +378,26 @@ details.filters[open] summary::after { content: "▴"; }
   'use strict';
   const LS_KEY = 'pakorn-expense-tracker-v1';
   const CATEGORIES = {
-    expense: ['อาหาร', 'เดินทาง', 'ที่พัก/ค่าเช่า', 'สาธารณูปโภค', 'ช้อปปิ้ง', 'สุขภาพ', 'บันเทิง', 'การศึกษา', 'เครื่องแต่งกาย', 'เครื่องสำอาง', 'น้ำหอม', 'หนี้', 'อื่นๆ'],
+    expense: ['อาหาร', 'เครื่องดื่ม', 'เดินทาง', 'ที่พัก/ค่าเช่า', 'สาธารณูปโภค', 'ช้อปปิ้ง', 'สุขภาพ', 'บันเทิง', 'การศึกษา', 'เครื่องแต่งกาย', 'เครื่องสำอาง', 'น้ำหอม', 'หนี้', 'อื่นๆ'],
     income: ['เงินเดือน', 'งานเสริม', 'โบนัส', 'ดอกเบี้ย/ปันผล', 'อื่นๆ'],
   };
+  const SUBCATS = {
+    'อาหาร': ['ของคาว', 'ของหวาน', 'อาหารเสริม', 'วัตถุดิบ'],
+    'เครื่องดื่ม': ['กาแฟ', 'ชา', 'น้ำหวาน', 'น้ำเปล่า'],
+  };
+  const needsSub = (t) => !!SUBCATS[t.category] && !SUBCATS[t.category].includes(t.sub);
+  const catLabel = (t) => (t.sub ? `${t.category} › ${t.sub}` : t.category);
+  // shows and fills a sub-category select; required whenever the category has sub-categories
+  function fillSub(sel, wrap, category, selected) {
+    const subs = SUBCATS[category];
+    sel.innerHTML = '';
+    if (wrap) wrap.hidden = !subs;
+    sel.required = !!subs;
+    if (!subs) return;
+    const ph = document.createElement('option'); ph.value = ''; ph.textContent = 'เลือกหมวดย่อย'; sel.appendChild(ph);
+    for (const c of subs) { const o = document.createElement('option'); o.value = o.textContent = c; sel.appendChild(o); }
+    sel.value = subs.includes(selected) ? selected : '';
+  }
   const $ = (id) => document.getElementById(id);
   const fmt = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const dateFmt = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short' });
@@ -424,6 +445,7 @@ details.filters[open] summary::after { content: "▴"; }
     if (selected && !opts.includes(selected)) opts.push(selected);
     for (const c of opts) { const o = document.createElement('option'); o.value = o.textContent = c; sel.appendChild(o); }
     if (selected) sel.value = selected;
+    fillSub($('subcat'), $('subWrap'), sel.value);
   }
 
   // ---------- storage (cloud db, else this browser) ----------
@@ -539,7 +561,7 @@ details.filters[open] summary::after { content: "▴"; }
       if (catSel.size && !catSel.has(t.category)) return false;
       if (f.min !== null && t.amount < f.min) return false;
       if (f.max !== null && t.amount > f.max) return false;
-      if (f.q && !((t.note || '') + ' ' + t.category).toLowerCase().includes(f.q)) return false;
+      if (f.q && !((t.note || '') + ' ' + t.category + ' ' + (t.sub || '')).toLowerCase().includes(f.q)) return false;
       return true;
     });
   }
@@ -587,8 +609,15 @@ details.filters[open] summary::after { content: "▴"; }
   function renderBreakdown(monthTx, total, range) {
     const box = $('breakdown');
     box.innerHTML = '';
-    const byCat = {};
-    for (const t of monthTx) if (t.type === 'expense') byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+    const byCat = {}, bySub = {};
+    for (const t of monthTx) if (t.type === 'expense') {
+      byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+      if (SUBCATS[t.category]) {
+        const k = t.sub || 'ไม่ระบุ';
+        bySub[t.category] = bySub[t.category] || {};
+        bySub[t.category][k] = (bySub[t.category][k] || 0) + t.amount;
+      }
+    }
     const bud = range ? {} : budgets();
     for (const c of Object.keys(bud)) if (bud[c] > 0 && !(c in byCat)) byCat[c] = 0;
     const rows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
@@ -626,6 +655,11 @@ details.filters[open] summary::after { content: "▴"; }
         : `${fmt.format(val)} (${total ? Math.round((val / total) * 100) : 0}%)`;
       if (b) v.title = over ? `เกินงบ ${fmt.format(val - b)} บาท` : `เหลือ ${fmt.format(b - val)} บาท`;
       row.append(name, track, v); box.appendChild(row);
+      if (bySub[cat]) {
+        const sub = document.createElement('div'); sub.className = 'bsub';
+        sub.textContent = Object.entries(bySub[cat]).sort((a, b) => b[1] - a[1]).map(([k, x]) => `${k} ${fmt.format(x)}`).join(' · ');
+        box.appendChild(sub);
+      }
     }
   }
 
@@ -748,7 +782,7 @@ details.filters[open] summary::after { content: "▴"; }
           if (date > today) break;
           const id = `rec-${r.id}-${m}`;
           if (!transactions.some((t) => t.id === id)) {
-            await putTx({ id, createdAt: Date.now(), type: r.type, amount: r.amount, category: r.category, note: r.note, date, recurringId: r.id });
+            await putTx({ id, createdAt: Date.now(), type: r.type, amount: r.amount, category: r.category, ...(r.sub ? { sub: r.sub } : {}), note: r.note, date, recurringId: r.id });
           }
           last = m; m = shiftMonth(m, 1);
         }
@@ -773,7 +807,7 @@ details.filters[open] summary::after { content: "▴"; }
         return occurDate(m, r.day);
       })();
       const meta = document.createElement('div'); meta.className = 'meta';
-      meta.textContent = `${r.category} · ทุกวันที่ ${r.day} · ครั้งถัดไป ${shortFmt.format(isoToDate(next))}`;
+      meta.textContent = `${catLabel(r)} · ทุกวันที่ ${r.day} · ครั้งถัดไป ${shortFmt.format(isoToDate(next))}`;
       main.append(nm, meta);
       const btns = document.createElement('div'); btns.className = 'row-btns';
       const ed = document.createElement('button'); ed.type = 'button'; ed.textContent = 'แก้ไข'; ed.onclick = () => openRecForm(r);
@@ -785,12 +819,14 @@ details.filters[open] summary::after { content: "▴"; }
     const sel = $('recCat'); sel.innerHTML = '';
     for (const c of CATEGORIES[type]) { const o = document.createElement('option'); o.value = o.textContent = c; sel.appendChild(o); }
     if (selected && CATEGORIES[type].includes(selected)) sel.value = selected;
+    fillSub($('recSub'), $('recSubWrap'), sel.value);
   }
   function openRecForm(r) {
     editingRec = r ? r.id : null;
     const today = todayISO();
     $('recType').value = r ? r.type : 'expense';
     fillRecCats($('recType').value, r ? r.category : null);
+    fillSub($('recSub'), $('recSubWrap'), $('recCat').value, r ? r.sub : null);
     $('recAmount').value = r ? r.amount : '';
     $('recNote').value = r ? r.note : '';
     const day = r ? r.day : Number(today.slice(8));
@@ -810,7 +846,7 @@ details.filters[open] summary::after { content: "▴"; }
     for (const t of shown) {
       const li = document.createElement('li');
       const main = document.createElement('div');
-      const cat = document.createElement('div'); cat.className = 'cat'; cat.textContent = t.category;
+      const cat = document.createElement('div'); cat.className = 'cat'; cat.textContent = catLabel(t);
       const [y, m, d] = t.date.split('-').map(Number);
       const meta = document.createElement('div'); meta.className = 'meta';
       meta.textContent = dateFmt.format(new Date(y, m - 1, d)) + (t.note ? ` · ${t.note}` : '');
@@ -854,6 +890,7 @@ details.filters[open] summary::after { content: "▴"; }
     editingId = id;
     (t.type === 'income' ? $('typeIncome') : $('typeExpense')).checked = true;
     fillCategories(t.type, t.category);
+    fillSub($('subcat'), $('subWrap'), t.category, t.sub);
     $('amount').value = t.amount; $('date').value = t.date; $('note').value = t.note || '';
     $('formTitle').textContent = 'แก้ไขรายการ';
     $('submitBtn').textContent = 'บันทึกการแก้ไข';
@@ -873,6 +910,10 @@ details.filters[open] summary::after { content: "▴"; }
       type: selectedType(), amount, date: $('date').value,
       category: $('category').value, note: $('note').value.trim(),
     };
+    if (SUBCATS[tx.category]) {
+      tx.sub = $('subcat').value;
+      if (!tx.sub) { toast('เลือกหมวดย่อยก่อนบันทึก'); $('subcat').focus(); return; }
+    }
     $('submitBtn').disabled = true;
     try {
       await putTx(tx);
@@ -886,6 +927,7 @@ details.filters[open] summary::after { content: "▴"; }
 
   document.querySelectorAll('input[name="type"]').forEach((r) => r.addEventListener('change', () => fillCategories(selectedType())));
   $('cancelEdit').onclick = resetForm;
+  $('category').addEventListener('change', () => fillSub($('subcat'), $('subWrap'), $('category').value));
   [...new Set([...CATEGORIES.expense, ...CATEGORIES.income])].forEach((c, i) => {
     const lab = document.createElement('label'); lab.className = 'chip';
     const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'fCat' + i; cb.value = c;
@@ -942,6 +984,7 @@ details.filters[open] summary::after { content: "▴"; }
   $('recToggle').onclick = () => openRecForm(null);
   $('recCancel').onclick = closeRecForm;
   $('recType').onchange = () => fillRecCats($('recType').value);
+  $('recCat').onchange = () => fillSub($('recSub'), $('recSubWrap'), $('recCat').value);
   $('recForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const amount = Math.round(parseFloat($('recAmount').value) * 100) / 100;
@@ -950,6 +993,10 @@ details.filters[open] summary::after { content: "▴"; }
     const old = editingRec && extra.recurring.find((r) => r.id === editingRec);
     const r = { id: editingRec || uid(), type: $('recType').value, amount, category: $('recCat').value,
       note: $('recNote').value.trim(), day, startMonth: $('recStart').value };
+    if (SUBCATS[r.category]) {
+      r.sub = $('recSub').value;
+      if (!r.sub) { toast('เลือกหมวดย่อยก่อนบันทึก'); $('recSub').focus(); return; }
+    }
     if (old && old.doneThrough && old.startMonth === r.startMonth) r.doneThrough = old.doneThrough;
     $('recSubmit').disabled = true;
     try { await putDoc('recurring', r); closeRecForm(); toast('บันทึกรายการประจำแล้ว'); }
@@ -985,9 +1032,9 @@ details.filters[open] summary::after { content: "▴"; }
   $('exportJson').onclick = () => saveFile(`transactions-${todayISO()}.json`, JSON.stringify(transactions, null, 2));
   $('exportCsv').onclick = () => {
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const lines = [['วันที่', 'ประเภท', 'หมวดหมู่', 'จำนวนเงิน', 'บันทึก'].map(esc).join(',')];
+    const lines = [['วันที่', 'ประเภท', 'หมวดหมู่', 'หมวดย่อย', 'จำนวนเงิน', 'บันทึก'].map(esc).join(',')];
     for (const t of [...transactions].sort((a, b) => a.date.localeCompare(b.date)))
-      lines.push([t.date, t.type === 'income' ? 'รายรับ' : 'รายจ่าย', t.category, t.amount.toFixed(2), t.note].map(esc).join(','));
+      lines.push([t.date, t.type === 'income' ? 'รายรับ' : 'รายจ่าย', t.category, t.sub || '', t.amount.toFixed(2), t.note].map(esc).join(','));
     saveFile(`transactions-${todayISO()}.csv`, '﻿' + lines.join('\r\n'));
   };
   $('importJson').onchange = async (e) => {
@@ -1007,20 +1054,39 @@ details.filters[open] summary::after { content: "▴"; }
   };
 
   // ---------- quick entry ----------
+  // checked top to bottom; the first entry whose keyword appears wins. [category, keywords, sub-category]
   const EXP_KW = [
+    ['อาหาร', ['ไอศกรีม', 'ไอติม', 'ice cream', 'วิปครีม', 'ครีมชีส', 'ข้าวเหนียวมะม่วง'], 'ของหวาน'],
+    ['อาหาร', ['แป้งสาลี', 'แป้งทอด', 'แป้งเค้ก', 'แป้งข้าว', 'แป้งมัน'], 'วัตถุดิบ'],
     ['น้ำหอม', ['น้ำหอม', 'perfume']],
     ['เครื่องสำอาง', ['เครื่องสำอาง', 'ลิป', 'แป้ง', 'ครีม', 'สกินแคร์', 'มาสคาร่า', 'อายแชโดว์', 'รองพื้น', 'โฟมล้างหน้า', 'เซรั่ม']],
     ['หนี้', ['หนี้', 'บัตรเครดิต', 'ค่างวด', 'กยศ', 'คืนเงินยืม']],
     ['เครื่องแต่งกาย', ['เครื่องแต่งกาย', 'เสื้อ', 'กางเกง', 'กระโปรง', 'รองเท้า', 'ชุดนอน', 'ถุงเท้า', 'เข็มขัด']],
     ['สาธารณูปโภค', ['ค่าไฟ', 'ค่าน้ำ', 'ค่าเน็ต', 'อินเทอร์เน็ต', 'อินเตอร์เน็ต', 'ค่าโทร', 'ค่ามือถือ', 'โทรศัพท์']],
     ['ที่พัก/ค่าเช่า', ['ค่าเช่า', 'ค่าห้อง', 'ค่าหอ', 'คอนโด', 'ผ่อนบ้าน', 'ค่าส่วนกลาง']],
+    ['เครื่องดื่ม', ['น้ำเปล่า', 'น้ำดื่ม', 'น้ำแร่'], 'น้ำเปล่า'],
+    ['เครื่องดื่ม', ['กาแฟ', 'coffee', 'ลาเต้', 'latte', 'อเมริกาโน่', 'americano', 'เอสเปรสโซ่', 'espresso', 'คาปูชิโน่', 'cappuccino', 'มอคค่า', 'mocha', 'starbucks', 'สตาร์บัคส์', 'อเมซอน', 'cafe amazon'], 'กาแฟ'],
+    ['เครื่องดื่ม', ['ชานม', 'ชาไทย', 'ชาเขียว', 'ชาเย็น', 'ชามะนาว', 'ชาดำ', 'ชาไข่มุก', 'ไข่มุก', 'มัทฉะ', 'matcha', 'bubble tea', 'tea'], 'ชา'],
+    ['เครื่องดื่ม', ['น้ำหวาน', 'น้ำอัดลม', 'โค้ก', 'coke', 'เป๊ปซี่', 'pepsi', 'แฟนต้า', 'สไปรท์', 'น้ำผลไม้', 'น้ำส้ม', 'โกโก้', 'นมเย็น', 'นมชมพู', 'อิตาเลียนโซดา', 'สมูทตี้', 'smoothie', 'ปั่น'], 'น้ำหวาน'],
+    ['อาหาร', ['อาหารเสริม', 'วิตามิน', 'vitamin', 'คอลลาเจน', 'collagen', 'เวย์', 'whey', 'โปรตีน', 'protein', 'ไฟเบอร์', 'fiber', 'เมล็ดเจีย', 'chia', 'น้ำมันปลา', 'fish oil', 'กลูต้า', 'โพรไบโอติก', 'probiotic'], 'อาหารเสริม'],
+    ['อาหาร', ['วัตถุดิบ', 'ผักสด', 'ซื้อผัก', 'ไข่ไก่', 'แผงไข่', 'ข้าวสาร', 'ซอส', 'น้ำปลา', 'น้ำจิ้ม', 'เครื่องปรุง', 'น้ำมันพืช', 'น้ำมันหอย', 'ซีอิ๊ว', 'หมูสับ', 'อกไก่', 'เนื้อสด', 'ตลาด', 'แม็คโคร', 'makro', 'โลตัส', 'lotus', 'บิ๊กซี', 'big c', 'bigc', 'ท็อปส์', 'tops', 'วิลล่า', 'villa'], 'วัตถุดิบ'],
+    ['อาหาร', ['ข้าว', 'ก๋วยเตี๋ยว', 'ส้มตำ', 'กะเพรา', 'ผัด', 'แกง', 'ต้ม', 'ยำ', 'ชาบู', 'สุกี้', 'หมูกระทะ', 'ปิ้งย่าง', 'บุฟเฟ่ต์', 'โจ๊ก', 'ขนมจีน', 'ไก่', 'หมู', 'เนื้อ', 'ปลา', 'กุ้ง', 'ซูชิ', 'sushi', 'ราเมง', 'ramen', 'พิซซ่า', 'pizza', 'เบอร์เกอร์', 'burger', 'สเต็ก', 'steak', 'kfc', 'mcdonald', 'กับข้าว', 'มื้อเช้า', 'มื้อเที่ยง', 'มื้อเย็น'], 'ของคาว'],
+    ['อาหาร', ['ของหวาน', 'ขนม', 'เค้ก', 'cake', 'บิงซู', 'โดนัท', 'donut', 'ช็อกโกแลต', 'chocolate', 'ลูกอม', 'เบเกอรี่', 'ครัวซองต์', 'พุดดิ้ง', 'บัวลอย', 'ทองหยิบ', 'ผลไม้', 'มะม่วง', 'after you', 'swensen', 'วาฟเฟิล', 'บราวนี่', 'คุกกี้'], 'ของหวาน'],
+    ['เครื่องดื่ม', ['ชา'], 'ชา'],
+    ['อาหาร', ['grabfood', 'grab food', 'lineman', 'foodpanda', 'robinhood']],
     ['เดินทาง', ['น้ำมัน', 'แท็กซี่', 'แท๊กซี่', 'taxi', 'grab', 'bolt', 'bts', 'mrt', 'ทางด่วน', 'มอไซค์', 'วินมอ', 'ค่ารถ', 'รถ', 'เรือ', 'เครื่องบิน', 'จอดรถ']],
     ['สุขภาพ', ['โรงพยาบาล', 'คลินิก', 'หมอ', 'ยา', 'ฟิตเนส', 'ทำฟัน', 'ประกัน']],
     ['การศึกษา', ['หนังสือ', 'คอร์ส', 'เรียน', 'ค่าเทอม']],
     ['บันเทิง', ['หนัง', 'netflix', 'spotify', 'youtube', 'เกม', 'คอนเสิร์ต', 'เที่ยว', 'เบียร์', 'เหล้า', 'คาราโอเกะ']],
-    ['ช้อปปิ้ง', ['เสื้อ', 'กางเกง', 'รองเท้า', 'กระเป๋า', 'shopee', 'lazada', 'ช้อป', 'ซื้อของ']],
-    ['อาหาร', ['กิน', 'ข้าว', 'กาแฟ', 'ชา', 'น้ำ', 'ขนม', 'อาหาร', 'ก๋วยเตี๋ยว', 'ส้มตำ', 'ชาบู', 'หมูกระทะ', 'บุฟเฟ่ต์', 'ผลไม้', 'นม', 'มื้อ', 'เซเว่น', '7-11', 'starbucks', 'kfc', 'mcdonald']],
+    ['ช้อปปิ้ง', ['กระเป๋า', 'shopee', 'lazada', 'ช้อป', 'ซื้อของ']],
+    ['อาหาร', ['กิน', 'อาหาร', 'มื้อ', 'เซเว่น', '7-11']],
+    ['เครื่องดื่ม', ['เครื่องดื่ม', 'ดื่ม', 'นม', 'น้ำ']],
   ];
+  function classify(note) {
+    const low = note.toLowerCase();
+    for (const [cat, kws, sub] of EXP_KW) if (kws.some((k) => low.includes(k))) return { category: cat, sub: sub || '' };
+    return { category: 'อื่นๆ', sub: '' };
+  }
   const INC_KW = [
     ['เงินเดือน', ['เงินเดือน', 'salary']],
     ['โบนัส', ['โบนัส']],
@@ -1056,8 +1122,8 @@ details.filters[open] summary::after { content: "▴"; }
       const type = forceIncome || incCat ? 'income' : 'expense';
       const lowNote = note.toLowerCase();
       const debtHit = extra.debts.some((d) => d.keyword && lowNote.includes(String(d.keyword).toLowerCase()));
-      const category = type === 'income' ? (incCat || 'อื่นๆ') : (debtHit ? 'หนี้' : (matchKw(EXP_KW, note) || 'อื่นๆ'));
-      return { type, amount, category, note, date };
+      const c = type === 'income' ? { category: incCat || 'อื่นๆ', sub: '' } : (debtHit ? { category: 'หนี้', sub: '' } : classify(note));
+      return { type, amount, category: c.category, ...(c.sub ? { sub: c.sub } : {}), note, date };
     }).filter((t) => t.amount > 0);
     return items.length ? items : null;
   }
@@ -1082,12 +1148,17 @@ details.filters[open] summary::after { content: "▴"; }
       toast('ไม่เจอจำนวนเงิน ลองพิมพ์เป็นตัวเลข เช่น "กินข้าว 50"');
       return;
     }
+    if (items.some(needsSub)) {
+      showDraft(items, 'เลือกหมวดย่อยก่อนบันทึก');
+      toast('ยังเดาหมวดย่อยไม่ได้ เลือกในกล่องด้านล่างแล้วกดบันทึก');
+      return;
+    }
     $('quickSubmit').disabled = true;
     const ok = await saveItems(items);
     $('quickSubmit').disabled = false;
     if (ok === items.length) {
       $('quickText').value = '';
-      toast('จดแล้ว: ' + items.map((t) => `${t.category} ${t.type === 'income' ? '+' : ''}฿${fmt.format(t.amount)}`).join(', '));
+      toast('จดแล้ว: ' + items.map((t) => `${t.sub || t.category} ${t.type === 'income' ? '+' : ''}฿${fmt.format(t.amount)}`).join(', '));
     } else toast(`บันทึกได้ ${ok} จาก ${items.length} รายการ ลองอีกครั้ง`);
   });
 
@@ -1115,20 +1186,23 @@ details.filters[open] summary::after { content: "▴"; }
         for (const c of opts) { const o = document.createElement('option'); o.value = o.textContent = c; cat.appendChild(o); }
         cat.value = it.category;
       };
-      fillCat();
+      const sub = document.createElement('select'); sub.setAttribute('aria-label', 'หมวดย่อย');
+      const syncSub = () => { fillSub(sub, null, it.category, it.sub); sub.hidden = !SUBCATS[it.category]; it.sub = sub.value || ''; };
+      fillCat(); syncSub();
       const note = document.createElement('input'); note.type = 'text'; note.value = it.note; note.maxLength = 100;
       note.className = 'd-note'; note.setAttribute('aria-label', 'บันทึก');
       const amt = document.createElement('input'); amt.type = 'number'; amt.step = '0.01'; amt.min = '0.01'; amt.value = it.amount;
       amt.inputMode = 'decimal'; amt.setAttribute('aria-label', 'จำนวนเงิน');
       const date = document.createElement('input'); date.type = 'date'; date.value = it.date; date.setAttribute('aria-label', 'วันที่');
       const rm = document.createElement('button'); rm.type = 'button'; rm.textContent = '✕'; rm.setAttribute('aria-label', 'เอารายการนี้ออก');
-      type.onchange = () => { it.type = type.value; fillCat(); };
-      cat.onchange = () => { it.category = cat.value; };
+      type.onchange = () => { it.type = type.value; fillCat(); syncSub(); };
+      cat.onchange = () => { it.category = cat.value; syncSub(); };
+      sub.onchange = () => { it.sub = sub.value; };
       note.oninput = () => { it.note = note.value; };
       amt.oninput = () => { it.amount = Math.round(parseFloat(amt.value) * 100) / 100; updateDraftTotal(); };
       date.onchange = () => { it.date = date.value; };
       rm.onclick = () => { draft.splice(i, 1); draft.length ? renderDraft() : closeDraft(); };
-      row.append(type, amt, note, cat, rm);
+      row.append(type, amt, note, cat, sub, rm);
       row.insertBefore(date, cat);
       box.appendChild(row);
     });
@@ -1143,8 +1217,10 @@ details.filters[open] summary::after { content: "▴"; }
   $('draftSave').onclick = async () => {
     const bad = draft.findIndex((t) => !(t.amount > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(t.date));
     if (bad >= 0) { toast(`รายการที่ ${bad + 1} ยังไม่มีจำนวนเงินหรือวันที่`); return; }
+    const noSub = draft.findIndex(needsSub);
+    if (noSub >= 0) { toast(`รายการที่ ${noSub + 1} ยังไม่ได้เลือกหมวดย่อย`); return; }
     $('draftSave').disabled = true;
-    const items = draft.map((t) => ({ type: t.type, amount: t.amount, category: t.category, note: (t.note || '').trim(), date: t.date }));
+    const items = draft.map((t) => ({ type: t.type, amount: t.amount, category: t.category, ...(SUBCATS[t.category] ? { sub: t.sub } : {}), note: (t.note || '').trim(), date: t.date }));
     const ok = await saveItems(items);
     $('draftSave').disabled = false;
     if (ok === items.length) { closeDraft(); $('quickText').value = ''; toast(`บันทึก ${ok} รายการแล้ว`); }
@@ -1165,8 +1241,9 @@ details.filters[open] summary::after { content: "▴"; }
       const type = x && x.type === 'income' ? 'income' : 'expense';
       const amount = Math.round(Math.abs(Number(x && x.amount)) * 100) / 100;
       const category = CATEGORIES[type].includes(x && x.category) ? x.category : 'อื่นๆ';
+      const sub = SUBCATS[category] && SUBCATS[category].includes(x && x.sub) ? x.sub : '';
       const date = x && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? x.date : todayISO();
-      return { type, amount: isFinite(amount) ? amount : 0, category, note: String((x && x.note) || '').slice(0, 100), date };
+      return { type, amount: isFinite(amount) ? amount : 0, category, sub, note: String((x && x.note) || '').slice(0, 100), date };
     }).filter((t) => t.amount > 0);
   }
   function aiError(e) {
@@ -1182,7 +1259,8 @@ details.filters[open] summary::after { content: "▴"; }
   const RULES = () => `วันนี้คือ ${todayISO()}
 หมวดรายจ่ายที่ใช้ได้: ${CATEGORIES.expense.join(', ')}
 หมวดรายรับที่ใช้ได้: ${CATEGORIES.income.join(', ')}
-ตอบเป็น JSON อย่างเดียวในรูปแบบ {"items":[{"type":"expense"|"income","amount":ตัวเลขบาท,"category":"ชื่อหมวดจากรายการด้านบน","note":"คำอธิบายสั้นภาษาไทย","date":"YYYY-MM-DD"}]}
+หมวดย่อย (ต้องใส่เมื่อหมวดเป็นอาหารหรือเครื่องดื่ม ถ้าเป็นหมวดอื่นให้ใส่ ""): ${Object.entries(SUBCATS).map(([k, v]) => `${k} = ${v.join(', ')}`).join(' | ')}
+ตอบเป็น JSON อย่างเดียวในรูปแบบ {"items":[{"type":"expense"|"income","amount":ตัวเลขบาท,"category":"ชื่อหมวดจากรายการด้านบน","sub":"หมวดย่อยหรือ \"\"","note":"คำอธิบายสั้นภาษาไทย","date":"YYYY-MM-DD"}]}
 ถ้าไม่เจอรายการที่มีจำนวนเงินเลย ให้ตอบ {"items":[]}`;
 
   async function aiParseText(text) {
