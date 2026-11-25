@@ -79,7 +79,7 @@ button.danger { border-color: var(--expense); color: var(--expense); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .breakdown { display: flex; flex-direction: column; gap: 6px; }
-.brow { display: grid; grid-template-columns: 104px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: .9rem; }
+.brow { display: grid; grid-template-columns: 124px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: .9rem; }
 .track { background: var(--bg); border-radius: 4px; height: 10px; overflow: hidden; }
 .fill { background: var(--bar); height: 100%; }
 .val { font-family: var(--font-num); font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -149,6 +149,15 @@ details.filters[open] summary::after { content: "▴"; }
 .tx-list { list-style: none; margin: 0; padding: 0; }
 .tx-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
 .tx-list li:first-child { border-top: 0; }
+.tx-list li.day { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; margin-top: 14px; border: 0; border-radius: 8px; background: var(--bg); }
+.tx-list li.day:first-child { margin-top: 0; }
+.tx-list li.day + li { border-top: 0; }
+.day-date { font-weight: 600; }
+.day-sum { font-family: var(--font-num); font-size: .82rem; color: var(--muted); display: flex; gap: 10px; }
+.day-sum .exp { color: var(--expense); }
+.day-sum .inc { color: var(--income); }
+.tx-list li.item { padding-left: 10px; }
 .cat { font-weight: 500; }
 .meta { color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
 .amt { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -184,7 +193,7 @@ details.filters[open] summary::after { content: "▴"; }
   .grid { grid-template-columns: 1fr; }
   .draft-row { grid-template-columns: 1fr 1fr; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .draft-row .d-note { grid-column: 1 / -1; }
-  .brow { grid-template-columns: 76px minmax(0, 1fr) auto; }
+  .brow { grid-template-columns: 112px minmax(0, 1fr) auto; }
 }
 </style>
 
@@ -622,6 +631,23 @@ details.filters[open] summary::after { content: "▴"; }
     b.append(c, t); b.onclick = onToggle;
     return b;
   }
+  // the entries behind one bar, newest first
+  function itemList(monthTx, match, fallback, level) {
+    const ul = document.createElement('ul'); ul.className = 'bitems';
+    if (level === 1) ul.style.paddingLeft = '16px';
+    const items = monthTx.filter((t) => t.type === 'expense' && match(t))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
+    if (!items.length) {
+      const li = document.createElement('li'); li.textContent = 'ยังไม่มีรายการในช่วงนี้'; ul.appendChild(li);
+    }
+    for (const t of items) {
+      const li = document.createElement('li');
+      const a = document.createElement('span'); a.textContent = `${dateFmt.format(isoToDate(t.date))} · ${t.note || fallback}`;
+      const b = document.createElement('span'); b.textContent = fmt.format(t.amount);
+      li.append(a, b); ul.appendChild(li);
+    }
+    return ul;
+  }
   const budgets = () => { const b = extra.settings.find((x) => x.id === 'budgets'); return (b && b.byCat) || {}; };
   function renderBreakdown(monthTx, total, range) {
     const box = $('breakdown');
@@ -661,9 +687,7 @@ details.filters[open] summary::after { content: "▴"; }
       const b = bud[cat] > 0 ? bud[cat] : 0;
       const over = b && val > b;
       const row = document.createElement('div'); row.className = 'brow';
-      const name = bySub[cat]
-        ? caretBtn(cat, openCats.has(cat), () => { openCats.has(cat) ? openCats.delete(cat) : openCats.add(cat); render(); })
-        : Object.assign(document.createElement('span'), { textContent: cat });
+      const name = caretBtn(cat, openCats.has(cat), () => { openCats.has(cat) ? openCats.delete(cat) : openCats.add(cat); render(); });
       const track = document.createElement('div'); track.className = 'track';
       const fill = document.createElement('div'); fill.className = 'fill' + (over ? ' over' : '');
       fill.style.width = (b ? Math.min(val / b, 1) : val / max) * 100 + '%';
@@ -685,20 +709,9 @@ details.filters[open] summary::after { content: "▴"; }
           const v2 = document.createElement('span'); v2.className = 'val';
           v2.textContent = `${fmt.format(x)} (${val ? Math.round((x / val) * 100) : 0}%)`;
           r2.append(n2, t2, v2); box.appendChild(r2);
-          if (openSubs.has(key)) {
-            const ul = document.createElement('ul'); ul.className = 'bitems';
-            const items = monthTx.filter((t) => t.type === 'expense' && t.category === cat && (t.sub || 'ไม่ระบุ') === k)
-              .sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
-            for (const t of items) {
-              const li = document.createElement('li');
-              const a = document.createElement('span'); a.textContent = `${dateFmt.format(isoToDate(t.date))} · ${t.note || k}`;
-              const b = document.createElement('span'); b.textContent = fmt.format(t.amount);
-              li.append(a, b); ul.appendChild(li);
-            }
-            box.appendChild(ul);
-          }
+          if (openSubs.has(key)) box.appendChild(itemList(monthTx, (t) => t.category === cat && (t.sub || 'ไม่ระบุ') === k, k, 2));
         }
-      }
+      } else if (openCats.has(cat)) box.appendChild(itemList(monthTx, (t) => t.category === cat, cat, 1));
     }
   }
 
@@ -878,18 +891,35 @@ details.filters[open] summary::after { content: "▴"; }
   }
   function closeRecForm() { editingRec = null; $('recForm').hidden = true; $('recToggle').hidden = false; }
 
+  const dayFmt = new Intl.DateTimeFormat('th-TH', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
   function renderList(shown) {
     const list = $('txList');
     list.innerHTML = '';
     $('emptyMsg').hidden = shown.length > 0;
+    const today = todayISO(), yesterday = isoOffset(-1);
+    let lastDate = null;
     for (const t of shown) {
-      const li = document.createElement('li');
+      if (t.date !== lastDate) {
+        lastDate = t.date;
+        const dayTx = shown.filter((x) => x.date === t.date);
+        const exp = dayTx.reduce((a, x) => a + (x.type === 'expense' ? x.amount : 0), 0);
+        const inc = dayTx.reduce((a, x) => a + (x.type === 'income' ? x.amount : 0), 0);
+        const head = document.createElement('li'); head.className = 'day';
+        const dd = document.createElement('span'); dd.className = 'day-date';
+        const prefix = t.date === today ? 'วันนี้ · ' : t.date === yesterday ? 'เมื่อวาน · ' : '';
+        dd.textContent = prefix + dayFmt.format(isoToDate(t.date));
+        const sum = document.createElement('span'); sum.className = 'day-sum';
+        if (exp) { const e = document.createElement('span'); e.className = 'exp'; e.textContent = `จ่าย ${fmt.format(exp)}`; sum.appendChild(e); }
+        if (inc) { const i = document.createElement('span'); i.className = 'inc'; i.textContent = `รับ ${fmt.format(inc)}`; sum.appendChild(i); }
+        head.append(dd, sum); list.appendChild(head);
+      }
+      const li = document.createElement('li'); li.className = 'item';
       const main = document.createElement('div');
       const cat = document.createElement('div'); cat.className = 'cat'; cat.textContent = catLabel(t);
-      const [y, m, d] = t.date.split('-').map(Number);
       const meta = document.createElement('div'); meta.className = 'meta';
-      meta.textContent = dateFmt.format(new Date(y, m - 1, d)) + (t.note ? ` · ${t.note}` : '');
-      main.append(cat, meta);
+      meta.textContent = t.note || '';
+      main.append(cat);
+      if (t.note) main.append(meta);
       const amt = document.createElement('div'); amt.className = 'amt ' + t.type;
       amt.textContent = (t.type === 'income' ? '+' : '−') + fmt.format(t.amount);
       const btns = document.createElement('div'); btns.className = 'row-btns';
