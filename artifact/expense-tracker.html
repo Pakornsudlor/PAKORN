@@ -44,7 +44,7 @@ h1 { margin: 0; font-size: 1.35rem; font-weight: 600; text-wrap: balance; }
 h2 { margin: 0; font-size: 1rem; font-weight: 600; }
 .status { font-size: .8rem; color: var(--muted); }
 .today { font-size: .95rem; font-weight: 500; color: var(--accent); }
-.today span { color: var(--muted); font-weight: 400; }
+.today div { color: var(--muted); font-weight: 400; font-size: .85rem; }
 .month-nav { display: flex; gap: 6px; align-items: center; }
 input, select, button {
   font: inherit; color: var(--text); background: var(--surface);
@@ -330,8 +330,8 @@ button.danger { border-color: var(--expense); color: var(--expense); }
     const spent = transactions.reduce((s, t) => s + (t.type === 'expense' && t.date === today ? t.amount : 0), 0);
     const line = $('todayLine');
     line.textContent = 'วันนี้ ' + fullDateFmt.format(new Date());
-    const extra = document.createElement('span');
-    extra.textContent = spent > 0 ? ` · ใช้ไปแล้ว ${fmt.format(spent)} บาท` : ' · ยังไม่ได้จดรายจ่ายวันนี้';
+    const extra = document.createElement('div');
+    extra.textContent = spent > 0 ? `ใช้ไปแล้ว ${fmt.format(spent)} บาท` : 'ยังไม่ได้จดรายจ่ายวันนี้';
     line.appendChild(extra);
   }
 
