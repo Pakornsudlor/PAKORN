@@ -14,20 +14,22 @@
   --expense: #b8352b;
   --accent: #1f6b5c;
   --bar: #e2918a;
+  --bar-inc: #7fc6a3;
   --font-body: "IBM Plex Sans Thai", system-ui, sans-serif;
   --font-num: "IBM Plex Mono", ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #121715; --surface: #1b2220; --text: #e6ebe9; --muted: #96a29d; --border: #2c3532;
-    --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; color-scheme: dark;
+    --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; --bar-inc: #3b8c66; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #121715; --surface: #1b2220; --text: #e6ebe9; --muted: #96a29d; --border: #2c3532;
-  --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; color-scheme: dark;
+  --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; --bar-inc: #3b8c66; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--text);
   font-family: var(--font-body); font-size: 15px; line-height: 1.55;
@@ -84,6 +86,39 @@ button.danger { border-color: var(--expense); color: var(--expense); }
 
 .list-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .list-count { color: var(--muted); font-size: .85rem; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.panel-head button { padding: 4px 10px; font-size: .85rem; }
+.fill.over { background: var(--expense); }
+.val.over { color: var(--expense); }
+.budget-total { font-size: .88rem; color: var(--muted); margin: 0; }
+.budget-total strong { color: var(--text); font-weight: 500; }
+.budget-total .over { color: var(--expense); font-weight: 600; }
+.sub-box { border: 1px dashed var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.budget-grid label { display: flex; flex-direction: column; gap: 2px; font-size: .82rem; color: var(--muted); }
+.budget-grid input { width: 100%; padding: 6px 8px; }
+.mchart { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; height: 160px; align-items: end; border-bottom: 1px solid var(--border); }
+.mcol { display: flex; justify-content: center; align-items: flex-end; gap: 3px; height: 100%; }
+.mbar { width: 40%; max-width: 22px; border-radius: 3px 3px 0 0; min-height: 1px; }
+.mbar.exp { background: var(--bar); }
+.mbar.inc { background: var(--bar-inc); }
+.mcol.current .mbar.exp { background: var(--expense); }
+.mbudget { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--muted); pointer-events: none; }
+.mbudget span { position: absolute; right: 0; top: -1.4em; font-size: .72rem; color: var(--muted); background: var(--surface); padding: 0 4px; }
+.mlabels { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; text-align: center; font-size: .75rem; color: var(--muted); }
+.mlabels div { display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.mlabels b { font-weight: 500; color: var(--text); font-family: var(--font-num); font-size: .7rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .8rem; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stats div { display: flex; flex-direction: column; font-size: .82rem; color: var(--muted); }
+.stats strong { font-family: var(--font-num); font-size: 1rem; color: var(--text); font-weight: 500; }
+.items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.items li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 10px 0; border-top: 1px solid var(--border); align-items: center; }
+.items li:first-child { border-top: 0; }
+.items .track { grid-column: 1 / -1; height: 8px; }
+.items .fill.paid { background: var(--income); }
+.items .meta b { color: var(--text); font-weight: 500; }
 details.filters { display: block; padding: 0; }
 details.filters summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: 12px 16px; list-style: none; }
 details.filters summary::-webkit-details-marker { display: none; }
@@ -213,8 +248,54 @@ details.filters[open] summary::after { content: "▴"; }
   </section>
 
   <section class="panel">
-    <h2>รายจ่ายตามหมวดหมู่</h2>
+    <div class="panel-head">
+      <h2>รายจ่ายตามหมวดหมู่</h2>
+      <button type="button" id="budgetToggle">ตั้งงบรายเดือน</button>
+    </div>
+    <p class="budget-total" id="budgetTotal" hidden></p>
     <div id="breakdown" class="breakdown"></div>
+    <div class="sub-box" id="budgetEdit" hidden>
+      <p class="hint" style="margin:0">ใส่งบต่อเดือนของแต่ละหมวด เว้นว่างไว้ถ้าไม่ต้องการตั้งงบหมวดนั้น</p>
+      <div class="budget-grid" id="budgetGrid"></div>
+      <div class="actions">
+        <button type="button" class="primary" id="budgetSave">บันทึกงบ</button>
+        <button type="button" id="budgetCancel">ยกเลิก</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>เทียบรายเดือน</h2>
+    <div class="legend"><span><i style="background:var(--bar-inc)"></i>รายรับ</span><span><i style="background:var(--bar)"></i>รายจ่าย</span><span id="mLegendBudget" hidden><i style="border-top:2px dashed var(--muted);height:0;border-radius:0"></i>งบรวมต่อเดือน</span></div>
+    <div class="mchart" id="mChart" role="img"></div>
+    <div class="mlabels" id="mLabels"></div>
+    <div class="stats">
+      <div>รายจ่ายเฉลี่ยต่อเดือน<strong id="avgExp">–</strong></div>
+      <div>รายรับเฉลี่ยต่อเดือน<strong id="avgInc">–</strong></div>
+    </div>
+    <p class="hint" id="mNote"></p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>หนี้ที่ต้องจ่าย</h2>
+      <button type="button" id="debtToggle">เพิ่มหนี้</button>
+    </div>
+    <ul class="items" id="debtList"></ul>
+    <p class="empty" id="debtEmpty">ยังไม่ได้เพิ่มหนี้ กด "เพิ่มหนี้" แล้วใส่ยอดหนี้ทั้งหมด ระบบจะหักยอดให้ทุกครั้งที่จดรายจ่ายหมวดหนี้ที่มีคำค้นของหนี้ก้อนนั้น</p>
+    <form class="sub-box" id="debtForm" hidden autocomplete="off">
+      <div class="grid">
+        <label>ชื่อหนี้<input type="text" id="debtName" maxlength="40" required placeholder="เช่น SPayLater"></label>
+        <label>คำค้นในบันทึก<input type="text" id="debtKey" maxlength="30" required placeholder="เช่น spay"></label>
+        <label>ยอดหนี้ทั้งหมด (บาท)<input type="number" id="debtTotal" min="0.01" step="0.01" inputmode="decimal" required></label>
+        <label>เริ่มนับการจ่ายตั้งแต่<input type="date" id="debtStart" required></label>
+      </div>
+      <p class="hint" style="margin:0">ทุกรายการหมวด "หนี้" ที่มีคำค้นนี้ในบันทึก ตั้งแต่วันที่เริ่มนับ จะถูกหักจากยอดหนี้ จดด่วนว่า "หนี้ spay 500" ก็หักให้อัตโนมัติ</p>
+      <div class="actions">
+        <button type="submit" class="primary" id="debtSubmit">บันทึกหนี้</button>
+        <button type="button" id="debtCancel">ยกเลิก</button>
+      </div>
+    </form>
   </section>
 
   <details class="panel filters" id="filterPanel">
@@ -251,6 +332,32 @@ details.filters[open] summary::after { content: "▴"; }
   </section>
 
   <section class="panel">
+    <div class="panel-head">
+      <h2>รายการจดประจำ</h2>
+      <button type="button" id="recToggle">เพิ่มรายการประจำ</button>
+    </div>
+    <ul class="items" id="recList"></ul>
+    <p class="empty" id="recEmpty">ยังไม่มีรายการประจำ เช่น ค่า Spotify หรือค่าเช่าที่จ่ายทุกเดือน ตั้งไว้แล้วระบบจะจดให้เองเมื่อถึงวัน</p>
+    <form class="sub-box" id="recForm" hidden autocomplete="off">
+      <div class="grid">
+        <label>ประเภท
+          <select id="recType"><option value="expense">รายจ่าย</option><option value="income">รายรับ</option></select>
+        </label>
+        <label>จำนวนเงิน (บาท)<input type="number" id="recAmount" min="0.01" step="0.01" inputmode="decimal" required></label>
+        <label>หมวดหมู่<select id="recCat"></select></label>
+        <label>บันทึก<input type="text" id="recNote" maxlength="100" required placeholder="เช่น spotify"></label>
+        <label>จดทุกวันที่<input type="number" id="recDay" min="1" max="31" step="1" required></label>
+        <label>เริ่มเดือน<input type="month" id="recStart" required></label>
+      </div>
+      <p class="hint" style="margin:0" id="recHint">ถ้าเดือนไหนมีไม่ถึงวันที่ตั้งไว้ จะจดในวันสุดท้ายของเดือนนั้น</p>
+      <div class="actions">
+        <button type="submit" class="primary" id="recSubmit">บันทึกรายการประจำ</button>
+        <button type="button" id="recCancel">ยกเลิก</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
     <h2>สำรองข้อมูล</h2>
     <div class="actions">
       <button type="button" id="exportJson">ส่งออก JSON</button>
@@ -278,6 +385,9 @@ details.filters[open] summary::after { content: "▴"; }
   let currentMonth = todayISO().slice(0, 7);
   let editingId = null;
   let store = null;       // db collection when the cloud store is available
+  let dbRef = null;
+  const extra = { debts: [], recurring: [], settings: [] };
+  const LS_EXTRA = { debts: 'pakorn-debts-v1', recurring: 'pakorn-recurring-v1', settings: 'pakorn-settings-v1' };
   let downloads = null;
 
   // ---------- helpers ----------
@@ -338,23 +448,57 @@ details.filters[open] summary::after { content: "▴"; }
     if (store) await store.doc(id).delete();
     else { transactions = transactions.filter((t) => t.id !== id); lsSave(); render(); }
   }
+  // debts / recurring / settings live in their own collections
+  function lsExtraSave(coll) {
+    try { localStorage.setItem(LS_EXTRA[coll], JSON.stringify(extra[coll])); } catch { toast('บันทึกในเบราว์เซอร์ไม่สำเร็จ'); }
+  }
+  async function putDoc(coll, obj) {
+    if (dbRef) { const { id, ...body } = obj; await dbRef.collection(coll).doc(id).set(body); return; }
+    const list = extra[coll];
+    const i = list.findIndex((x) => x.id === obj.id);
+    i >= 0 ? (list[i] = obj) : list.push(obj);
+    lsExtraSave(coll); onExtra(coll);
+  }
+  async function delDoc(coll, id) {
+    if (dbRef) { await dbRef.collection(coll).doc(id).delete(); return; }
+    extra[coll] = extra[coll].filter((x) => x.id !== id);
+    lsExtraSave(coll); onExtra(coll);
+  }
+  const loaded = { tx: false, recurring: false };
+  function onExtra(coll) {
+    if (coll === 'recurring') { loaded.recurring = true; runRecurring(); }
+    render();
+  }
 
   async function initStorage() {
     let db = null;
     try { db = window.claude ? await window.claude.use('db') : null; } catch { db = null; }
     if (!db) {
       transactions = lsLoad();
+      for (const coll of Object.keys(LS_EXTRA)) {
+        try { const d = JSON.parse(localStorage.getItem(LS_EXTRA[coll]) || '[]'); extra[coll] = Array.isArray(d) ? d : []; } catch { extra[coll] = []; }
+      }
+      loaded.tx = true; loaded.recurring = true;
+      runRecurring();
       $('status').textContent = 'เก็บข้อมูลในเบราว์เซอร์นี้';
       $('storageHint').textContent = 'ตอนนี้ข้อมูลเก็บไว้ในเบราว์เซอร์นี้เท่านั้น ควรส่งออกไฟล์สำรองไว้เป็นระยะ';
       render();
       return;
     }
     store = db.collection('tx');
+    dbRef = db;
+    for (const coll of Object.keys(LS_EXTRA)) {
+      db.collection(coll).onSnapshot((snap) => {
+        extra[coll] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (coll === 'recurring' && !snap.metadata.fromCache) loaded.recurring = true;
+        onExtra(coll);
+      }, () => { /* the tx listener reports load problems */ });
+    }
     $('storageHint').textContent = 'ข้อมูลบันทึกไว้กับหน้านี้บนบัญชี Claude ของคุณ เปิดจากเครื่องไหนก็เห็นข้อมูลเดียวกัน';
     const timer = setTimeout(() => { $('status').textContent = 'ยังเชื่อมต่อที่เก็บข้อมูลไม่ได้ ข้อมูลที่เห็นอาจไม่ล่าสุด'; }, 10000);
     store.onSnapshot((snap) => {
       transactions = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isValidTx);
-      if (!snap.metadata.fromCache) { clearTimeout(timer); $('status').textContent = 'ซิงก์ข้อมูลแล้ว'; }
+      if (!snap.metadata.fromCache) { clearTimeout(timer); $('status').textContent = 'ซิงก์ข้อมูลแล้ว'; loaded.tx = true; runRecurring(); }
       render();
     }, (e) => {
       clearTimeout(timer);
@@ -431,33 +575,233 @@ details.filters[open] summary::after { content: "▴"; }
     $('emptyMsg').textContent = active
       ? 'ไม่มีรายการที่ตรงกับตัวกรอง ลองกด "ล้างตัวกรอง"'
       : 'ยังไม่มีรายการในเดือนนี้ เพิ่มรายการแรกได้จากฟอร์มด้านบน';
-    renderBreakdown(shown, expense);
+    renderBreakdown(shown, expense, range);
     renderList(shown);
+    renderMonths();
+    renderDebts();
+    renderRecurring();
+    try { localStorage.setItem('pakorn-filters-v1', JSON.stringify({ ...f, cats: [...catSel] })); } catch { /* optional */ }
   }
 
-  function renderBreakdown(monthTx, total) {
+  const budgets = () => { const b = extra.settings.find((x) => x.id === 'budgets'); return (b && b.byCat) || {}; };
+  function renderBreakdown(monthTx, total, range) {
     const box = $('breakdown');
     box.innerHTML = '';
     const byCat = {};
     for (const t of monthTx) if (t.type === 'expense') byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+    const bud = range ? {} : budgets();
+    for (const c of Object.keys(bud)) if (bud[c] > 0 && !(c in byCat)) byCat[c] = 0;
     const rows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+    const budSum = Object.values(bud).reduce((a, v) => a + (v > 0 ? v : 0), 0);
+    const bt = $('budgetTotal');
+    bt.hidden = !budSum;
+    if (budSum) {
+      const left = budSum - total;
+      bt.innerHTML = '';
+      const parts = [['งบรวม ', fmt.format(budSum)], [' · ใช้ไป ', fmt.format(total)]];
+      for (const [l, v] of parts) { bt.append(l); const b = document.createElement('strong'); b.textContent = v; bt.append(b); }
+      const tail = document.createElement('span');
+      tail.textContent = left >= 0 ? ` · เหลือ ${fmt.format(left)} บาท` : ` · เกินงบ ${fmt.format(-left)} บาท`;
+      if (left < 0) tail.className = 'over';
+      bt.append(tail);
+    }
     if (!rows.length) {
       const p = document.createElement('p'); p.className = 'empty';
-      p.textContent = 'เมื่อบันทึกรายจ่าย จะเห็นสัดส่วนแยกตามหมวดหมู่ตรงนี้';
+      p.textContent = 'เมื่อบันทึกรายจ่าย จะเห็นสัดส่วนแยกตามหมวดหมู่ตรงนี้ กด "ตั้งงบรายเดือน" เพื่อเทียบกับงบ';
       box.appendChild(p); return;
     }
-    const max = rows[0][1];
+    const max = Math.max(...rows.map((r) => r[1]), 1);
     for (const [cat, val] of rows) {
+      const b = bud[cat] > 0 ? bud[cat] : 0;
+      const over = b && val > b;
       const row = document.createElement('div'); row.className = 'brow';
       const name = document.createElement('span'); name.textContent = cat;
       const track = document.createElement('div'); track.className = 'track';
-      const fill = document.createElement('div'); fill.className = 'fill'; fill.style.width = (val / max) * 100 + '%';
+      const fill = document.createElement('div'); fill.className = 'fill' + (over ? ' over' : '');
+      fill.style.width = (b ? Math.min(val / b, 1) : val / max) * 100 + '%';
       track.appendChild(fill);
-      const v = document.createElement('span'); v.className = 'val';
-      v.textContent = `${fmt.format(val)} (${total ? Math.round((val / total) * 100) : 0}%)`;
+      const v = document.createElement('span'); v.className = 'val' + (over ? ' over' : '');
+      v.textContent = b
+        ? `${fmt.format(val)} / ${fmt.format(b)}`
+        : `${fmt.format(val)} (${total ? Math.round((val / total) * 100) : 0}%)`;
+      if (b) v.title = over ? `เกินงบ ${fmt.format(val - b)} บาท` : `เหลือ ${fmt.format(b - val)} บาท`;
       row.append(name, track, v); box.appendChild(row);
     }
   }
+
+  // ---------- month comparison ----------
+  const mShortFmt = new Intl.DateTimeFormat('th-TH', { month: 'short' });
+  const compact = new Intl.NumberFormat('th-TH', { notation: 'compact', maximumFractionDigits: 1 });
+  function renderMonths() {
+    const months = [];
+    for (let i = 5; i >= 0; i--) months.push(shiftMonth(currentMonth, -i));
+    const sums = months.map((m) => {
+      let inc = 0, exp = 0;
+      for (const t of transactions) if (t.date.startsWith(m)) t.type === 'income' ? (inc += t.amount) : (exp += t.amount);
+      return { m, inc, exp };
+    });
+    const budSum = Object.values(budgets()).reduce((a, v) => a + (v > 0 ? v : 0), 0);
+    const max = Math.max(1, budSum, ...sums.map((x) => Math.max(x.inc, x.exp)));
+    const chart = $('mChart'), labels = $('mLabels');
+    chart.innerHTML = ''; labels.innerHTML = '';
+    for (const x of sums) {
+      const col = document.createElement('div'); col.className = 'mcol' + (x.m === currentMonth ? ' current' : '');
+      const inc = document.createElement('div'); inc.className = 'mbar inc'; inc.style.height = (x.inc / max) * 100 + '%';
+      inc.title = `รายรับ ${fmt.format(x.inc)} บาท`;
+      const exp = document.createElement('div'); exp.className = 'mbar exp'; exp.style.height = (x.exp / max) * 100 + '%';
+      exp.title = `รายจ่าย ${fmt.format(x.exp)} บาท`;
+      col.append(inc, exp); chart.appendChild(col);
+      const lab = document.createElement('div');
+      lab.append(mShortFmt.format(isoToDate(x.m)));
+      const v = document.createElement('b'); v.textContent = x.exp ? '−' + compact.format(x.exp) : '–';
+      lab.appendChild(v); labels.appendChild(lab);
+    }
+    if (budSum) {
+      const line = document.createElement('div'); line.className = 'mbudget';
+      line.style.bottom = (budSum / max) * 100 + '%';
+      const tag = document.createElement('span'); tag.textContent = 'งบ ' + compact.format(budSum);
+      line.appendChild(tag); chart.appendChild(line);
+    }
+    $('mLegendBudget').hidden = !budSum;
+    chart.setAttribute('aria-label', 'รายรับรายจ่าย 6 เดือน: ' + sums.map((x) => `${mShortFmt.format(isoToDate(x.m))} รายรับ ${fmt.format(x.inc)} รายจ่าย ${fmt.format(x.exp)}`).join(', '));
+    const withData = sums.filter((x) => x.inc || x.exp);
+    $('avgExp').textContent = withData.length ? fmt.format(withData.reduce((a, x) => a + x.exp, 0) / withData.length) : '–';
+    $('avgInc').textContent = withData.length ? fmt.format(withData.reduce((a, x) => a + x.inc, 0) / withData.length) : '–';
+    $('mNote').textContent = withData.length < 2
+      ? `ค่าเฉลี่ยคิดจาก ${withData.length} เดือนที่มีข้อมูล จดต่อไปอีกสักเดือนสองเดือนจะเห็นแนวโน้มชัดขึ้น`
+      : `6 เดือนถึง${monthFmt.format(isoToDate(currentMonth))} ค่าเฉลี่ยคิดจาก ${withData.length} เดือนที่มีข้อมูล ไม่ขึ้นกับตัวกรอง`;
+  }
+
+  // ---------- debts ----------
+  function debtPaid(d) {
+    const key = String(d.keyword || '').toLowerCase();
+    return transactions.reduce((a, t) => a + (t.type === 'expense' && t.category === 'หนี้' && t.date >= (d.start || '0000')
+      && key && (t.note || '').toLowerCase().includes(key) ? t.amount : 0), 0);
+  }
+  let editingDebt = null;
+  function renderDebts() {
+    const list = $('debtList'); list.innerHTML = '';
+    const debts = [...extra.debts].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    $('debtEmpty').hidden = debts.length > 0;
+    for (const d of debts) {
+      const paid = debtPaid(d), total = Number(d.total) || 0, left = Math.max(0, total - paid);
+      const li = document.createElement('li');
+      const main = document.createElement('div');
+      const nm = document.createElement('div'); nm.className = 'cat'; nm.textContent = d.name + (left === 0 && total ? ' ✓ จ่ายครบแล้ว' : '');
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.append('จ่ายแล้ว ');
+      const b1 = document.createElement('b'); b1.textContent = fmt.format(paid); meta.append(b1);
+      meta.append(` จาก ${fmt.format(total)} · เหลือ `);
+      const b2 = document.createElement('b'); b2.textContent = fmt.format(left); meta.append(b2, ` บาท · คำค้น "${d.keyword}"`);
+      main.append(nm, meta);
+      const btns = document.createElement('div'); btns.className = 'row-btns';
+      const ed = document.createElement('button'); ed.type = 'button'; ed.textContent = 'แก้ไข'; ed.onclick = () => openDebtForm(d);
+      btns.append(ed, confirmDelete(() => delDoc('debts', d.id), 'ลบหนี้แล้ว'));
+      const track = document.createElement('div'); track.className = 'track';
+      const fill = document.createElement('div'); fill.className = 'fill paid'; fill.style.width = (total ? Math.min(paid / total, 1) : 0) * 100 + '%';
+      track.appendChild(fill);
+      li.append(main, btns, track); list.appendChild(li);
+    }
+  }
+  function confirmDelete(action, doneMsg) {
+    const del = document.createElement('button'); del.type = 'button'; del.textContent = 'ลบ';
+    let armed = null;
+    del.onclick = async () => {
+      if (!armed) {
+        del.textContent = 'ยืนยันลบ'; del.classList.add('danger');
+        armed = setTimeout(() => { armed = null; del.textContent = 'ลบ'; del.classList.remove('danger'); }, 3000);
+        return;
+      }
+      clearTimeout(armed);
+      try { await action(); toast(doneMsg); } catch { toast('ลบไม่สำเร็จ ลองอีกครั้ง'); }
+    };
+    return del;
+  }
+  function openDebtForm(d) {
+    editingDebt = d ? d.id : null;
+    $('debtName').value = d ? d.name : '';
+    $('debtKey').value = d ? d.keyword : '';
+    $('debtTotal').value = d ? d.total : '';
+    $('debtStart').value = d ? d.start : todayISO().slice(0, 8) + '01';
+    $('debtSubmit').textContent = d ? 'บันทึกการแก้ไข' : 'บันทึกหนี้';
+    $('debtForm').hidden = false; $('debtToggle').hidden = true;
+    $('debtName').focus();
+  }
+  function closeDebtForm() { editingDebt = null; $('debtForm').hidden = true; $('debtToggle').hidden = false; }
+
+  // ---------- recurring ----------
+  const daysIn = (ym) => { const [y, m] = ym.split('-').map(Number); return new Date(y, m, 0).getDate(); };
+  const occurDate = (ym, day) => `${ym}-${String(Math.min(day, daysIn(ym))).padStart(2, '0')}`;
+  let recRunning = false;
+  async function runRecurring() {
+    if (!loaded.tx || !loaded.recurring || recRunning) return;
+    recRunning = true;
+    try {
+      const today = todayISO(), thisMonth = today.slice(0, 7);
+      for (const r of extra.recurring) {
+        if (!(r.amount > 0) || !r.startMonth || !r.day) continue;
+        let m = r.doneThrough ? shiftMonth(r.doneThrough, 1) : r.startMonth;
+        if (m < r.startMonth) m = r.startMonth;
+        let last = null, guard = 0;
+        while (m <= thisMonth && guard++ < 36) {
+          const date = occurDate(m, r.day);
+          if (date > today) break;
+          const id = `rec-${r.id}-${m}`;
+          if (!transactions.some((t) => t.id === id)) {
+            await putTx({ id, createdAt: Date.now(), type: r.type, amount: r.amount, category: r.category, note: r.note, date, recurringId: r.id });
+          }
+          last = m; m = shiftMonth(m, 1);
+        }
+        if (last) await putDoc('recurring', { ...r, doneThrough: last });
+      }
+    } catch { toast('จดรายการประจำไม่สำเร็จ จะลองใหม่เมื่อเปิดหน้านี้ครั้งหน้า'); }
+    finally { recRunning = false; }
+  }
+  let editingRec = null;
+  function renderRecurring() {
+    const list = $('recList'); list.innerHTML = '';
+    const recs = [...extra.recurring].sort((a, b) => (a.day || 0) - (b.day || 0));
+    $('recEmpty').hidden = recs.length > 0;
+    for (const r of recs) {
+      const li = document.createElement('li');
+      const main = document.createElement('div');
+      const nm = document.createElement('div'); nm.className = 'cat';
+      nm.textContent = `${r.note || r.category} · ${r.type === 'income' ? '+' : '−'}${fmt.format(r.amount)}`;
+      const next = (() => {
+        let m = r.doneThrough ? shiftMonth(r.doneThrough, 1) : r.startMonth;
+        if (m < r.startMonth) m = r.startMonth;
+        return occurDate(m, r.day);
+      })();
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.textContent = `${r.category} · ทุกวันที่ ${r.day} · ครั้งถัดไป ${shortFmt.format(isoToDate(next))}`;
+      main.append(nm, meta);
+      const btns = document.createElement('div'); btns.className = 'row-btns';
+      const ed = document.createElement('button'); ed.type = 'button'; ed.textContent = 'แก้ไข'; ed.onclick = () => openRecForm(r);
+      btns.append(ed, confirmDelete(() => delDoc('recurring', r.id), 'ลบรายการประจำแล้ว รายการที่จดไปแล้วยังอยู่'));
+      li.append(main, btns); list.appendChild(li);
+    }
+  }
+  function fillRecCats(type, selected) {
+    const sel = $('recCat'); sel.innerHTML = '';
+    for (const c of CATEGORIES[type]) { const o = document.createElement('option'); o.value = o.textContent = c; sel.appendChild(o); }
+    if (selected && CATEGORIES[type].includes(selected)) sel.value = selected;
+  }
+  function openRecForm(r) {
+    editingRec = r ? r.id : null;
+    const today = todayISO();
+    $('recType').value = r ? r.type : 'expense';
+    fillRecCats($('recType').value, r ? r.category : null);
+    $('recAmount').value = r ? r.amount : '';
+    $('recNote').value = r ? r.note : '';
+    const day = r ? r.day : Number(today.slice(8));
+    $('recDay').value = day;
+    // a new rule starts next month when this month's date has already come, so nothing is recorded twice
+    $('recStart').value = r ? r.startMonth : (day <= Number(today.slice(8)) ? shiftMonth(today.slice(0, 7), 1) : today.slice(0, 7));
+    $('recSubmit').textContent = r ? 'บันทึกการแก้ไข' : 'บันทึกรายการประจำ';
+    $('recForm').hidden = false; $('recToggle').hidden = true;
+    $('recAmount').focus();
+  }
+  function closeRecForm() { editingRec = null; $('recForm').hidden = true; $('recToggle').hidden = false; }
 
   function renderList(shown) {
     const list = $('txList');
@@ -558,6 +902,75 @@ details.filters[open] summary::after { content: "▴"; }
     document.querySelectorAll('#fCats input').forEach((cb) => { cb.checked = false; });
     render();
   };
+  // budgets editor
+  $('budgetToggle').onclick = () => {
+    const grid = $('budgetGrid'); grid.innerHTML = '';
+    const bud = budgets();
+    CATEGORIES.expense.forEach((c, i) => {
+      const lab = document.createElement('label'); lab.textContent = c;
+      const inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.step = '1'; inp.inputMode = 'decimal';
+      inp.id = 'bud' + i; inp.dataset.cat = c; inp.placeholder = 'ไม่ตั้ง'; if (bud[c] > 0) inp.value = bud[c];
+      lab.appendChild(inp); grid.appendChild(lab);
+    });
+    $('budgetEdit').hidden = false; $('budgetToggle').hidden = true;
+  };
+  $('budgetCancel').onclick = () => { $('budgetEdit').hidden = true; $('budgetToggle').hidden = false; };
+  $('budgetSave').onclick = async () => {
+    const byCat = {};
+    $('budgetGrid').querySelectorAll('input').forEach((inp) => { const v = parseFloat(inp.value); if (v > 0) byCat[inp.dataset.cat] = Math.round(v * 100) / 100; });
+    $('budgetSave').disabled = true;
+    try { await putDoc('settings', { id: 'budgets', byCat }); $('budgetEdit').hidden = true; $('budgetToggle').hidden = false; toast('บันทึกงบแล้ว'); }
+    catch { toast('บันทึกงบไม่สำเร็จ ลองอีกครั้ง'); }
+    finally { $('budgetSave').disabled = false; }
+  };
+  // debts
+  $('debtToggle').onclick = () => openDebtForm(null);
+  $('debtCancel').onclick = closeDebtForm;
+  $('debtForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const total = Math.round(parseFloat($('debtTotal').value) * 100) / 100;
+    if (!(total > 0)) return;
+    const old = editingDebt && extra.debts.find((d) => d.id === editingDebt);
+    const d = { id: editingDebt || uid(), createdAt: old ? (old.createdAt || 0) : Date.now(), name: $('debtName').value.trim(),
+      keyword: $('debtKey').value.trim(), total, start: $('debtStart').value };
+    $('debtSubmit').disabled = true;
+    try { await putDoc('debts', d); closeDebtForm(); toast('บันทึกหนี้แล้ว'); }
+    catch { toast('บันทึกไม่สำเร็จ ลองอีกครั้ง'); }
+    finally { $('debtSubmit').disabled = false; }
+  });
+  // recurring
+  $('recToggle').onclick = () => openRecForm(null);
+  $('recCancel').onclick = closeRecForm;
+  $('recType').onchange = () => fillRecCats($('recType').value);
+  $('recForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const amount = Math.round(parseFloat($('recAmount').value) * 100) / 100;
+    const day = parseInt($('recDay').value, 10);
+    if (!(amount > 0) || !(day >= 1 && day <= 31) || !$('recStart').value) return;
+    const old = editingRec && extra.recurring.find((r) => r.id === editingRec);
+    const r = { id: editingRec || uid(), type: $('recType').value, amount, category: $('recCat').value,
+      note: $('recNote').value.trim(), day, startMonth: $('recStart').value };
+    if (old && old.doneThrough && old.startMonth === r.startMonth) r.doneThrough = old.doneThrough;
+    $('recSubmit').disabled = true;
+    try { await putDoc('recurring', r); closeRecForm(); toast('บันทึกรายการประจำแล้ว'); }
+    catch { toast('บันทึกไม่สำเร็จ ลองอีกครั้ง'); }
+    finally { $('recSubmit').disabled = false; }
+  });
+  // restore the last filters this browser used
+  try {
+    const saved = JSON.parse(localStorage.getItem('pakorn-filters-v1') || 'null');
+    if (saved) {
+      $('fSearch').value = saved.q || '';
+      if (['all', 'income', 'expense'].includes(saved.type)) $('filterType').value = saved.type;
+      $('fFrom').value = saved.from || ''; $('fTo').value = saved.to || '';
+      $('fMin').value = saved.min ?? ''; $('fMax').value = saved.max ?? '';
+      for (const c of saved.cats || []) catSel.add(c);
+      document.querySelectorAll('#fCats input').forEach((cb) => { cb.checked = catSel.has(cb.value); });
+      const n = [saved.q, saved.type && saved.type !== 'all', saved.from || saved.to, saved.min != null || saved.max != null, (saved.cats || []).length].filter(Boolean).length;
+      if (n) $('filterPanel').open = true;
+    }
+  } catch { /* start with no filters */ }
+
   const goMonth = (ym) => { currentMonth = ym; $('fFrom').value = ''; $('fTo').value = ''; if (!editingId) resetForm(); render(); };
   $('prevMonth').onclick = () => goMonth(shiftMonth(currentMonth, -1));
   $('nextMonth').onclick = () => goMonth(shiftMonth(currentMonth, 1));
@@ -641,7 +1054,9 @@ details.filters[open] summary::after { content: "▴"; }
       const amount = Math.round(parseFloat(m[1].replace(/,/g, '') + (m[2] ? '.' + m[2] : '')) * 100) / 100;
       const incCat = matchKw(INC_KW, note);
       const type = forceIncome || incCat ? 'income' : 'expense';
-      const category = type === 'income' ? (incCat || 'อื่นๆ') : (matchKw(EXP_KW, note) || 'อื่นๆ');
+      const lowNote = note.toLowerCase();
+      const debtHit = extra.debts.some((d) => d.keyword && lowNote.includes(String(d.keyword).toLowerCase()));
+      const category = type === 'income' ? (incCat || 'อื่นๆ') : (debtHit ? 'หนี้' : (matchKw(EXP_KW, note) || 'อื่นๆ'));
       return { type, amount, category, note, date };
     }).filter((t) => t.amount > 0);
     return items.length ? items : null;
