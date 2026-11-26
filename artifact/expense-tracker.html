@@ -161,7 +161,17 @@ details.filters[open] summary::after { content: "▴"; }
 .day-sum { font-family: var(--font-num); font-size: .82rem; color: var(--muted); display: flex; gap: 10px; }
 .day-sum .exp { color: var(--expense); }
 .day-sum .inc { color: var(--income); }
-.tx-list li.item { padding-left: 10px; }
+.tx-list li.grp { display: block; padding: 0; }
+.grp-btn { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 4px 9px 10px;
+  border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.grp-btn:hover .grp-name { color: var(--accent); }
+.grp-name { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.grp-btn .caret { color: var(--muted); font-size: .75rem; display: inline-block; width: 1em; }
+.tx-list li.lvl2 .grp-btn { padding-left: 28px; font-size: .92rem; }
+.tx-list li.lvl2 .grp-name { font-weight: 400; }
+.tx-list li.item.lvl2 { padding-left: 28px; }
+.tx-list li.item.lvl3 { padding-left: 46px; }
+.tx-list li.item .cat { font-weight: 400; font-size: .92rem; }
 .cat { font-weight: 500; }
 .meta { color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
 .amt { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -897,63 +907,89 @@ details.filters[open] summary::after { content: "▴"; }
 
   const dayFmt = new Intl.DateTimeFormat('th-TH', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
   const dayOpen = new Map(); // date -> open/closed chosen by the viewer; today starts open, other days closed
+  const listOpen = new Set(); // "date|category" and "date|category|sub" rows the viewer opened
+  function toggleRow(key) { listOpen.has(key) ? listOpen.delete(key) : listOpen.add(key); render(); }
+  // one collapsible summary row: caret + name + count on the left, total on the right
+  function groupRow(cls, key, label, count, total, type) {
+    const li = document.createElement('li'); li.className = cls;
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'grp-btn';
+    const open = listOpen.has(key);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.onclick = () => toggleRow(key);
+    const l = document.createElement('span'); l.className = 'grp-name';
+    const c = document.createElement('span'); c.className = 'caret'; c.textContent = open ? '▾' : '▸';
+    const n = document.createElement('span'); n.className = 'day-count'; n.textContent = ` · ${count} รายการ`;
+    l.append(c, label, n);
+    const v = document.createElement('span'); v.className = 'amt ' + type;
+    v.textContent = (type === 'income' ? '+' : '−') + fmt.format(total);
+    btn.append(l, v); li.appendChild(btn);
+    return li;
+  }
+  function entryRow(t, level) {
+    const li = document.createElement('li'); li.className = 'item lvl' + level;
+    const main = document.createElement('div');
+    const name = document.createElement('div'); name.className = 'cat'; name.textContent = t.note || t.sub || t.category;
+    main.append(name);
+    const amt = document.createElement('div'); amt.className = 'amt ' + t.type;
+    amt.textContent = (t.type === 'income' ? '+' : '−') + fmt.format(t.amount);
+    const btns = document.createElement('div'); btns.className = 'row-btns';
+    const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'แก้ไข';
+    edit.onclick = () => startEdit(t.id);
+    btns.append(edit, confirmDelete(async () => { await deleteTx(t.id); if (editingId === t.id) resetForm(); }, 'ลบรายการแล้ว'));
+    li.append(main, amt, btns);
+    return li;
+  }
+  const sumOf = (arr) => arr.reduce((a, x) => a + x.amount, 0);
   function renderList(shown) {
     const list = $('txList');
     list.innerHTML = '';
     $('emptyMsg').hidden = shown.length > 0;
     const today = todayISO(), yesterday = isoOffset(-1);
-    let lastDate = null, dayShown = true;
-    for (const t of shown) {
-      if (t.date !== lastDate) {
-        lastDate = t.date;
-        const dayTx = shown.filter((x) => x.date === t.date);
-        const exp = dayTx.reduce((a, x) => a + (x.type === 'expense' ? x.amount : 0), 0);
-        const inc = dayTx.reduce((a, x) => a + (x.type === 'income' ? x.amount : 0), 0);
-        const isOpen = dayOpen.has(t.date) ? dayOpen.get(t.date) : t.date === today;
-        const date = t.date;
-        const head = document.createElement('li'); head.className = 'day';
-        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'day-btn';
-        btn.setAttribute('aria-expanded', String(isOpen));
-        btn.onclick = () => { dayOpen.set(date, !isOpen); render(); };
-        const dd = document.createElement('span'); dd.className = 'day-date';
-        const caret = document.createElement('span'); caret.className = 'caret'; caret.textContent = isOpen ? '▾' : '▸';
-        const prefix = t.date === today ? 'วันนี้ · ' : t.date === yesterday ? 'เมื่อวาน · ' : '';
-        const cnt = document.createElement('span'); cnt.className = 'day-count'; cnt.textContent = ` · ${dayTx.length} รายการ`;
-        dd.append(caret, prefix + dayFmt.format(isoToDate(t.date)), cnt);
-        const sum = document.createElement('span'); sum.className = 'day-sum';
-        if (exp) { const e = document.createElement('span'); e.className = 'exp'; e.textContent = `จ่าย ${fmt.format(exp)}`; sum.appendChild(e); }
-        if (inc) { const i = document.createElement('span'); i.className = 'inc'; i.textContent = `รับ ${fmt.format(inc)}`; sum.appendChild(i); }
-        btn.append(dd, sum); head.appendChild(btn); list.appendChild(head);
-        dayShown = isOpen;
+    const dates = [...new Set(shown.map((t) => t.date))];
+    for (const date of dates) {
+      const dayTx = shown.filter((x) => x.date === date);
+      const exp = sumOf(dayTx.filter((x) => x.type === 'expense'));
+      const inc = sumOf(dayTx.filter((x) => x.type === 'income'));
+      const isOpen = dayOpen.has(date) ? dayOpen.get(date) : date === today;
+      const head = document.createElement('li'); head.className = 'day';
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'day-btn';
+      btn.setAttribute('aria-expanded', String(isOpen));
+      btn.onclick = () => { dayOpen.set(date, !isOpen); render(); };
+      const dd = document.createElement('span'); dd.className = 'day-date';
+      const caret = document.createElement('span'); caret.className = 'caret'; caret.textContent = isOpen ? '▾' : '▸';
+      const prefix = date === today ? 'วันนี้ · ' : date === yesterday ? 'เมื่อวาน · ' : '';
+      const cnt = document.createElement('span'); cnt.className = 'day-count'; cnt.textContent = ` · ${dayTx.length} รายการ`;
+      dd.append(caret, prefix + dayFmt.format(isoToDate(date)), cnt);
+      const sum = document.createElement('span'); sum.className = 'day-sum';
+      if (exp) { const e = document.createElement('span'); e.className = 'exp'; e.textContent = `จ่าย ${fmt.format(exp)}`; sum.appendChild(e); }
+      if (inc) { const i = document.createElement('span'); i.className = 'inc'; i.textContent = `รับ ${fmt.format(inc)}`; sum.appendChild(i); }
+      btn.append(dd, sum); head.appendChild(btn); list.appendChild(head);
+      if (!isOpen) continue;
+
+      // categories of the day, expenses first, biggest first
+      const groups = new Map();
+      for (const t of dayTx) {
+        const k = t.type + '|' + t.category;
+        if (!groups.has(k)) groups.set(k, { type: t.type, cat: t.category, items: [] });
+        groups.get(k).items.push(t);
       }
-      if (!dayShown) continue;
-      const li = document.createElement('li'); li.className = 'item';
-      const main = document.createElement('div');
-      const cat = document.createElement('div'); cat.className = 'cat'; cat.textContent = catLabel(t);
-      const meta = document.createElement('div'); meta.className = 'meta';
-      meta.textContent = t.note || '';
-      main.append(cat);
-      if (t.note) main.append(meta);
-      const amt = document.createElement('div'); amt.className = 'amt ' + t.type;
-      amt.textContent = (t.type === 'income' ? '+' : '−') + fmt.format(t.amount);
-      const btns = document.createElement('div'); btns.className = 'row-btns';
-      const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'แก้ไข';
-      edit.onclick = () => startEdit(t.id);
-      const del = document.createElement('button'); del.type = 'button'; del.textContent = 'ลบ';
-      let armed = null;
-      del.onclick = async () => {
-        if (!armed) {
-          del.textContent = 'ยืนยันลบ'; del.classList.add('danger');
-          armed = setTimeout(() => { armed = null; del.textContent = 'ลบ'; del.classList.remove('danger'); }, 3000);
-          return;
+      const ordered = [...groups.values()].sort((a, b) => (a.type === b.type ? sumOf(b.items) - sumOf(a.items) : a.type === 'expense' ? -1 : 1));
+      for (const g of ordered) {
+        const key = `${date}|${g.type}|${g.cat}`;
+        list.appendChild(groupRow('grp lvl1', key, g.cat, g.items.length, sumOf(g.items), g.type));
+        if (!listOpen.has(key)) continue;
+        if (SUBCATS[g.cat]) {
+          const subs = new Map();
+          for (const t of g.items) { const k = t.sub || 'ไม่ระบุ'; if (!subs.has(k)) subs.set(k, []); subs.get(k).push(t); }
+          for (const [sname, items] of [...subs.entries()].sort((a, b) => sumOf(b[1]) - sumOf(a[1]))) {
+            const skey = key + '|' + sname;
+            list.appendChild(groupRow('grp lvl2', skey, sname, items.length, sumOf(items), g.type));
+            if (listOpen.has(skey)) for (const t of items) list.appendChild(entryRow(t, 3));
+          }
+        } else {
+          for (const t of g.items) list.appendChild(entryRow(t, 2));
         }
-        clearTimeout(armed);
-        try { await deleteTx(t.id); if (editingId === t.id) resetForm(); toast('ลบรายการแล้ว'); }
-        catch { toast('ลบไม่สำเร็จ ลองอีกครั้ง'); }
-      };
-      btns.append(edit, del);
-      li.append(main, amt, btns);
-      list.appendChild(li);
+      }
     }
   }
 
