@@ -15,18 +15,19 @@
   --accent: #1f6b5c;
   --bar: #e2918a;
   --bar-inc: #7fc6a3;
+  --s1: #257de0; --s2: #f47230; --s3: #00b894; --s4: #f2a600; --s5: #ee7fac; --s6: #008a17; --s7: #6a4ce2; --s8: #ec4647; --s-rest: #a8aeab;
   --font-body: "IBM Plex Sans Thai", system-ui, sans-serif;
   --font-num: "IBM Plex Mono", ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #121715; --surface: #1b2220; --text: #e6ebe9; --muted: #96a29d; --border: #2c3532;
-    --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; --bar-inc: #3b8c66; color-scheme: dark;
+    --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; --bar-inc: #3b8c66; --s1: #338ced; --s2: #e76624; --s3: #00a888; --s4: #d28e05; --s5: #e24d8b; --s6: #0aac23; --s7: #9887ef; --s8: #eb6263; --s-rest: #6b7370; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #121715; --surface: #1b2220; --text: #e6ebe9; --muted: #96a29d; --border: #2c3532;
-  --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; --bar-inc: #3b8c66; color-scheme: dark;
+  --income: #4fc48d; --expense: #f07a70; --accent: #5cc0a8; --bar: #a9534b; --bar-inc: #3b8c66; --s1: #338ced; --s2: #e76624; --s3: #00a888; --s4: #d28e05; --s5: #e24d8b; --s6: #0aac23; --s7: #9887ef; --s8: #eb6263; --s-rest: #6b7370; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -89,6 +90,26 @@ button.danger { border-color: var(--expense); color: var(--expense); }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .panel-head button { padding: 4px 10px; font-size: .85rem; }
 .fill.over { background: var(--expense); }
+.donut-wrap { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: center; }
+.donut-box { position: relative; width: 200px; max-width: 100%; aspect-ratio: 1; margin: 0 auto; }
+.donut-box svg { width: 100%; height: 100%; display: block; }
+.donut-box circle.seg { cursor: pointer; transition: stroke-width .15s; }
+.donut-box circle.seg:hover, .donut-box circle.seg.active { stroke-width: 32; }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center; }
+.donut-center span { font-size: .78rem; color: var(--muted); }
+.donut-center strong { font-family: var(--font-num); font-size: 1.05rem; font-weight: 500; }
+.dtip { position: absolute; z-index: 2; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; font-size: .82rem; box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; transform: translate(-50%, -110%); }
+.dtip b { font-family: var(--font-num); font-weight: 500; }
+.dlegend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: .88rem; }
+.dlegend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 42px; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; cursor: default; }
+.dlegend li.active { background: var(--bg); }
+.dlegend i { width: 12px; height: 12px; border-radius: 3px; }
+.dlegend .n { overflow-wrap: anywhere; }
+.dlegend .n small { display: block; color: var(--muted); font-size: .75rem; }
+.dlegend .v { font-family: var(--font-num); font-size: .82rem; white-space: nowrap; }
+.dlegend .pc { font-family: var(--font-num); font-size: .82rem; color: var(--muted); text-align: right; }
+@media (max-width: 560px) { .donut-wrap { grid-template-columns: 1fr; } }
 .bname { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; display: flex; gap: 4px; align-items: baseline; min-width: 0; }
 .bname:hover { color: var(--accent); }
 .bname .caret { color: var(--muted); font-size: .75rem; width: .8em; flex: none; }
@@ -296,6 +317,19 @@ details.filters[open] summary::after { content: "▴"; }
         <button type="button" id="budgetCancel">ยกเลิก</button>
       </div>
     </div>
+  </section>
+
+  <section class="panel">
+    <h2>สัดส่วนรายจ่าย</h2>
+    <div class="donut-wrap" id="donutWrap">
+      <div class="donut-box">
+        <svg id="donut" viewBox="0 0 200 200" role="img" aria-label="สัดส่วนรายจ่ายตามหมวดหมู่"></svg>
+        <div class="donut-center"><span>รายจ่ายรวม</span><strong id="donutTotal">0.00</strong></div>
+        <div class="dtip" id="donutTip" hidden></div>
+      </div>
+      <ul class="dlegend" id="donutLegend"></ul>
+    </div>
+    <p class="empty" id="donutEmpty" hidden>เมื่อบันทึกรายจ่าย จะเห็นสัดส่วนแต่ละหมวดเป็นวงกลมตรงนี้</p>
   </section>
 
   <section class="panel">
@@ -629,6 +663,7 @@ details.filters[open] summary::after { content: "▴"; }
       ? 'ไม่มีรายการที่ตรงกับตัวกรอง ลองกด "ล้างตัวกรอง"'
       : 'ยังไม่มีรายการในเดือนนี้ เพิ่มรายการแรกได้จากฟอร์มด้านบน';
     renderBreakdown(shown, expense, range);
+    renderDonut(shown);
     renderList(shown);
     renderMonths();
     renderDebts();
@@ -727,6 +762,71 @@ details.filters[open] summary::after { content: "▴"; }
         }
       } else if (openCats.has(cat)) box.appendChild(itemList(monthTx, (t) => t.category === cat, cat, 1));
     }
+  }
+
+  // ---------- donut ----------
+  // each category keeps its own colour slot whatever its rank; the rest fold into one grey slice
+  const DONUT_SLOTS = ['อาหาร', 'เครื่องดื่ม', 'หนี้', 'เดินทาง', 'เครื่องสำอาง', 'ช้อปปิ้ง', 'บันเทิง', 'เครื่องแต่งกาย'];
+  const REST = 'หมวดอื่นๆ';
+  function renderDonut(shown) {
+    const byCat = {};
+    for (const t of shown) if (t.type === 'expense') byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+    const total = Object.values(byCat).reduce((a, v) => a + v, 0);
+    const svg = $('donut'), legend = $('donutLegend'), tip = $('donutTip');
+    svg.innerHTML = ''; legend.innerHTML = ''; tip.hidden = true;
+    $('donutWrap').hidden = !total; $('donutEmpty').hidden = !!total;
+    $('donutTotal').textContent = fmt.format(total);
+    if (!total) return;
+    const segs = [];
+    DONUT_SLOTS.forEach((c, i) => { if (byCat[c]) segs.push({ name: c, value: byCat[c], color: `var(--s${i + 1})`, parts: [c] }); });
+    const rest = Object.keys(byCat).filter((c) => !DONUT_SLOTS.includes(c) && byCat[c] > 0);
+    if (rest.length) segs.push({ name: rest.length === 1 ? rest[0] : REST, value: rest.reduce((a, c) => a + byCat[c], 0), color: 'var(--s-rest)', parts: rest });
+    const NS = 'http://www.w3.org/2000/svg', R = 80, C = 2 * Math.PI * R, GAP = segs.length > 1 ? 2 : 0;
+    const bg = document.createElementNS(NS, 'circle');
+    Object.entries({ cx: 100, cy: 100, r: R, fill: 'none', stroke: 'var(--bg)', 'stroke-width': 28 }).forEach(([k, v]) => bg.setAttribute(k, v));
+    svg.appendChild(bg);
+    let offset = 0;
+    const rows = [];
+    segs.forEach((g, i) => {
+      const len = (g.value / total) * C;
+      const pct = (g.value / total) * 100;
+      const pctText = pct < 1 ? '<1%' : Math.round(pct) + '%';
+      const c = document.createElementNS(NS, 'circle');
+      Object.entries({ cx: 100, cy: 100, r: R, fill: 'none', stroke: g.color, 'stroke-width': 28,
+        'stroke-dasharray': `${Math.max(len - GAP, 0.5)} ${C}`, 'stroke-dashoffset': -offset,
+        transform: 'rotate(-90 100 100)', class: 'seg', tabindex: 0 }).forEach(([k, v]) => c.setAttribute(k, v));
+      const title = document.createElementNS(NS, 'title'); title.textContent = `${g.name} ${fmt.format(g.value)} บาท (${pctText})`;
+      c.appendChild(title);
+      // tooltip sits at the middle of the arc
+      const mid = (offset + len / 2) / C * 2 * Math.PI - Math.PI / 2;
+      const show = () => {
+        tip.innerHTML = '';
+        const n = document.createElement('div'); n.textContent = g.parts.length > 1 ? `${g.name} (${g.parts.join(', ')})` : g.name;
+        const v = document.createElement('b'); v.textContent = `${fmt.format(g.value)} บาท · ${pctText}`;
+        tip.append(n, v);
+        tip.style.left = (50 + Math.cos(mid) * 40) + '%'; tip.style.top = (50 + Math.sin(mid) * 40) + '%';
+        tip.hidden = false;
+        svg.querySelectorAll('.seg').forEach((x) => x.classList.toggle('active', x === c));
+        rows.forEach((r, j) => r.classList.toggle('active', j === i));
+      };
+      const hide = () => { tip.hidden = true; c.classList.remove('active'); rows.forEach((r) => r.classList.remove('active')); };
+      c.addEventListener('pointerenter', show); c.addEventListener('pointerleave', hide);
+      c.addEventListener('focus', show); c.addEventListener('blur', hide);
+      c.addEventListener('click', show);
+      svg.appendChild(c);
+      offset += len;
+
+      const li = document.createElement('li');
+      const sw = document.createElement('i'); sw.style.background = g.color;
+      const nm = document.createElement('span'); nm.className = 'n'; nm.textContent = g.name;
+      if (g.parts.length > 1) { const sm = document.createElement('small'); sm.textContent = g.parts.join(', '); nm.appendChild(sm); }
+      const val = document.createElement('span'); val.className = 'v'; val.textContent = fmt.format(g.value);
+      const pc = document.createElement('span'); pc.className = 'pc'; pc.textContent = pctText;
+      li.append(sw, nm, val, pc);
+      li.addEventListener('pointerenter', show); li.addEventListener('pointerleave', hide);
+      rows.push(li); legend.appendChild(li);
+    });
+    svg.setAttribute('aria-label', 'สัดส่วนรายจ่าย: ' + segs.map((g) => `${g.name} ${Math.round((g.value / total) * 100)}%`).join(', '));
   }
 
   // ---------- month comparison ----------
